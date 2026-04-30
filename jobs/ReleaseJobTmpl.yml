@@ -45,9 +45,15 @@ parameters:
     type: string
     default: kwazdo@shks.de
 
+  - name: agentPoolName
+    type: string
+    default: "Self-hosted Linux (SEU)"
+
 jobs:
   - job: NPM_SETUP
     displayName: Vorbereitungen und Prüfungen
+    pool:
+      name: ${{ parameters.agentPoolName }}
     steps:
       - checkout: self
         submodules: true
@@ -69,7 +75,7 @@ jobs:
           workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
           script: |
             set -euo pipefail
-            npm config list --long
+            npm config list
 
       # Prüfen, ob package-lock.json vorhanden ist
       - bash: |
@@ -146,7 +152,7 @@ jobs:
     condition: and(succeeded(), eq(dependencies.NPM_SETUP.outputs['BRANCH_CHECK.isDefaultBranch'], 'true'))
     displayName: Default-Branch bauen
     pool:
-      name: Self-hosted Linux (SEU)
+      name: ${{ parameters.agentPoolName }}
     variables:
       releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
       isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
@@ -175,7 +181,7 @@ jobs:
     condition: and(succeeded(), eq(dependencies.NPM_SETUP.outputs['BRANCH_CHECK.isReleaseBranch'], 'true'))
     displayName: Release-Branch bauen
     pool:
-      name: Self-hosted Linux (SEU)
+      name: ${{ parameters.agentPoolName }}
     variables:
       releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
       isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
