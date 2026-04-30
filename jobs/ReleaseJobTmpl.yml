@@ -1,0 +1,194 @@
+parameters:
+  - name: npmUserConfig
+    type: string
+    default: '/home/kwazdo/.npmrc'
+
+  - name: projectPath
+    type: string
+    default: '/'
+
+  - name: artifactPath
+    type: object
+    default:
+      - 'target/'
+
+  - name: npmBuildCmd
+    type: object
+    default:
+      - 'run build'
+
+  - name: publishBuildArtifacts
+    type: boolean
+    default: false
+
+  - name: retention
+    type: boolean
+    default: true
+
+  - name: tagRelease
+    type: boolean
+    default: true
+
+  - name: tagUserName
+    type: string
+    default: "kwazdo"
+
+  - name: tagUserMailAdresse
+    type: string
+    default: kwazdo@shks.de
+
+jobs:
+  - job: NPM_SETUP
+    displayName: Vorbereitungen und Prüfungen
+    variables:
+      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
+    steps:
+      - checkout: self
+        submodules: true
+        persistCredentials: true
+        clean: true
+        displayName: Repository auschecken
+
+      #################################################################
+      #
+      # Setup (npm install/ci)
+      #
+      ################################################################
+
+      # Initialisieren der NPM-Konfiguration
+      - task: Bash@3
+        displayName: NPM zusätzliche Setup
+        inputs:
+          targetType: 'inline'
+          workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          script: |
+            set -euo pipefail
+            echo "npmUserConfig: ${{ parameters.npmUserConfig }}"
+            npm config set @shg:registry=https://spu.sha.vrkw.de/nexus/repository/npm-releases/ --userconfig="${NPM_CONFIG_USERCONFIG}"
+
+      # Prüfen, ob package-lock.json vorhanden ist
+      - bash: |
+          set -euo pipefail
+          if [ -f "package-lock.json" ]; then
+            echo "package-lock.json found -> continue"
+          else
+            echo "##vso[task.logissue type=error]package-lock.json erforderlich aber nicht gefunden"
+            echo "##vso[task.complete result=Failed;]Abbruch: package-lock.json erforderlich aber nicht gefunden"
+            exit 1
+          fi
+        displayName: "Prüfe package-lock.json"
+        workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
+      - bash: |
+          set -euo pipefail
+          if [ -f "package.json" ]; then
+            echo "package.json found -> continue"
+          else
+            echo "##vso[task.logissue type=error]package.json erforderlich aber nicht gefunden"
+            echo "##vso[task.complete result=Failed;]Abbruch: package.json erforderlich aber nicht gefunden"
+            exit 1
+          fi
+        displayName: "Prüfe package.json"
+        workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
+      - bash: |
+          set -euo pipefail
+          echo "##[section]Aktueller Branch: $(Build.SourceBranch)"
+          echo "##vso[task.setvariable variable=isDefaultBranch;isOutput=true]false"
+          echo "##vso[task.setvariable variable=isReleaseBranch;isOutput=true]false"
+          if [[ "$(Build.SourceBranch)" == refs/heads/test_release/* ]]; then
+            echo "Release-Branch erkannt."
+            echo "##vso[task.setvariable variable=isReleaseBranch;isOutput=true]true"
+          elif [[ "$(Build.SourceBranch)" == "refs/heads/master" ]] ||
+            [[ "$(Build.SourceBranch)" == "refs/heads/main" ]] ||
+            [[ "$(Build.SourceBranch)" == "refs/heads/develop" ]]; then
+            echo "Default-Branch erkannt."
+            echo "##vso[task.setvariable variable=isDefaultBranch;isOutput=true]true"
+          else
+            echo "##vso[task.logissue type=error]Nur release/* sowie master/main/develop sind erlaubt."
+            exit 1
+          fi
+        displayName: 'Prüfe Release- oder Default-Branch. Ansonsten Abbruch'
+        name: BRANCH_CHECK
+
+      # Versionsnummer, Version-Label und Pre-Release-Status ermitteln
+      - bash: |
+          set -euo pipefail
+          export VERSION=$(node -p "require('./package.json').version")
+          MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
+          echo "##vso[task.setvariable variable=versionLabel;isOutput=true]"
+          echo "##vso[task.setvariable variable=majorMinor;isOutput=true]$MAJOR_MINOR"
+
+          npm i --no-save semver --userconfig="${NPM_CONFIG_USERCONFIG}"
+          isPre=$(node -p "require('semver').prerelease(process.env.VERSION) !== null ? 'true' : 'false'")
+          if [ "$isPre" = "true" ]; then
+            VERSION_LABEL=$(node -e "const semver=require('semver'); const p=semver.prerelease(process.argv[1]); if(!p) process.exit(1); process.stdout.write(String(p[0]));" "$VERSION")
+            echo "##[section]Version mit Label ermittelt $VERSION mit versionLabel $VERSION_LABEL"
+            echo "##vso[task.setvariable variable=versionLabel;isOutput=true]$VERSION_LABEL"
+          else
+            echo "##[section]Release-Version ermittelt $VERSION"
+          fi
+
+          echo "##vso[task.setvariable variable=releaseNumber;isOutput=true]$VERSION"
+          echo "##vso[task.setvariable variable=isPreRelease;isOutput=true]$isPre"
+        displayName: "Ermittle Versionsnummer und Version-Label"
+        name: VERSION_CHECK
+        workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
+  - job: build_default_branch_job
+    dependsOn:
+      - NPM_SETUP
+    condition: and(succeeded(), eq(dependencies.NPM_SETUP.outputs['BRANCH_CHECK.isDefaultBranch'], 'true'))
+    displayName: Default-Branch bauen
+    pool:
+      name: Self-hosted Linux (SEU)
+    variables:
+      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
+      releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
+      isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
+      versionLabel: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.versionLabel'] ]
+      majorMinor: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.majorMinor'] ]
+      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
+    steps:
+      - template: templates/stepsValidateDefaultBranch.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+
+      - template: templates/stepsNpmBuildPublish.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmBuildCmd: ${{ parameters.npmBuildCmd }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+          artifactPath: ${{ parameters.artifactPath }}
+          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+          retention: ${{ parameters.retention }}
+          publishTag: '$(versionLabel)'
+
+  - job: build_release_branch_job
+    dependsOn:
+      - NPM_SETUP
+    condition: and(succeeded(), eq(dependencies.NPM_SETUP.outputs['BRANCH_CHECK.isReleaseBranch'], 'true'))
+    displayName: Release-Branch bauen
+    pool:
+      name: Self-hosted Linux (SEU)
+    variables:
+      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
+      releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
+      isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
+      versionLabel: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.versionLabel'] ]
+      majorMinor: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.majorMinor'] ]
+      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
+    steps:
+      - template: templates/stepsValidateReleaseBranch.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+
+      - template: templates/stepsNpmBuildPublish.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmBuildCmd: ${{ parameters.npmBuildCmd }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+          artifactPath: ${{ parameters.artifactPath }}
+          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+          retention: ${{ parameters.retention }}
+          publishTag: 'release-$(majorMinor)'

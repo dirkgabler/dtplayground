@@ -1,0 +1,29 @@
+parameters:
+  - name: projectPath
+    type: string
+
+steps:
+  - task: Bash@3
+    displayName: 'Prüfe Versionsregeln für Release-Branch'
+    inputs:
+      targetType: 'inline'
+      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      script: |
+        set -euo pipefail
+        echo "releaseNumber=$(releaseNumber)"
+        echo "isPreRelease=$(isPreRelease)"
+        echo "versionLabel=$(versionLabel)"
+
+        if [[ "$(isPreRelease)" == "true" && "$(versionLabel)" != "release" ]]; then
+          echo "##vso[task.logissue type=error]Auf release/* ist nur eine finale Version oder eine Version mit Label 'release' erlaubt."
+          exit 1
+        fi
+
+        BRANCH="$(Build.SourceBranch)"
+        EXPECTED="refs/heads/test_release/$(majorMinor)"
+        if [[ "$BRANCH" != "$EXPECTED" ]]; then
+          echo "##vso[task.logissue type=error]Release-Branch '$BRANCH' passt nicht zu major.minor '$(majorMinor)'. Erwartet: '$EXPECTED'."
+          exit 1
+        fi
+
+        echo "Release-Branch-Regeln erfolgreich geprüft."

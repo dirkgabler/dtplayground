@@ -1,0 +1,96 @@
+parameters:
+  - name: projectPath
+    type: string
+
+  - name: npmBuildCmd
+    type: object
+
+  - name: npmUserConfig
+    type: string
+
+  - name: artifactPath
+    type: object
+
+  - name: publishBuildArtifacts
+    type: boolean
+
+  - name: retention
+    type: boolean
+
+  - name: publishTag
+    type: string
+
+steps:
+  - checkout: self
+    submodules: true
+    persistCredentials: true
+    clean: true
+    displayName: Repository auschecken
+
+  - task: Bash@3
+    displayName: Git-Tags bereinigen und aktualisieren
+    inputs:
+      targetType: 'inline'
+      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      script: |
+        set -euo pipefail
+        git tag -l | xargs -r git tag -d
+        git fetch --tags --force origin
+
+  - task: Npm@1
+    displayName: "npm ci"
+    inputs:
+      command: custom
+      customCommand: ci --userconfig=${{ parameters.npmUserConfig }}
+      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
+  - ${{ each buildCmd in parameters.npmBuildCmd }}:
+      - task: Npm@1
+        displayName: NPM Command '${{ buildCmd }}'
+        inputs:
+          command: custom
+          customCommand: ${{ buildCmd }} --userconfig=${{ parameters.npmUserConfig }}
+          workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          verbose: true
+
+  - task: Bash@3
+    displayName: "NPM Publish Release-Format (major.minor.patch)"
+    condition: and(succeeded(), eq(variables['isPreRelease'], 'false'))
+    inputs:
+      targetType: 'inline'
+      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      verbose: true
+      script: |
+        npm publish --tag="${{ parameters.publishTag }}" --userconfig="${NPM_CONFIG_USERCONFIG}"
+
+  - task: Npm@1
+    displayName: NPM set pre-release version
+    condition: and(succeeded(), eq(variables['isPreRelease'], 'true'))
+    inputs:
+      command: custom
+      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
+      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
+  - task: Bash@3
+    displayName: "NPM Publish Pre-Release"
+    condition: and(succeeded(), eq(variables['isPreRelease'], 'true'))
+    inputs:
+      targetType: 'inline'
+      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      verbose: true
+      script: |
+        npm publish --tag="${{ parameters.publishTag }}" --userconfig="${NPM_CONFIG_USERCONFIG}"
+
+  - ${{ if eq(parameters.publishBuildArtifacts, true) }}:
+      - ${{ each artifactPath in parameters.artifactPath }}:
+        - task: PublishPipelineArtifact@1
+          inputs:
+            targetPath: $(Build.Repository.LocalPath)/${{ parameters.projectPath }}/${{ artifactPath }}
+            artifactName: ${{ artifactPath }}
+
+  - ${{ if eq(parameters.retention, true) }}:
+      - task: Retention@1
+        displayName: Save pipeline run
+        inputs:
+          months: 12
+          retainbuilds: true

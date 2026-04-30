@@ -1,0 +1,24 @@
+parameters:
+  - name: projectPath
+    type: string
+
+steps:
+  - task: Bash@3
+    displayName: 'Prüfe Versionsregeln für Default-Branch'
+    inputs:
+      targetType: 'inline'
+      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      script: |
+        set -euo pipefail
+        echo "releaseNumber=$(releaseNumber)"
+        echo "isPreRelease=$(isPreRelease)"
+        echo "versionLabel=$(versionLabel)"
+        if [[ "$(isPreRelease)" != "true" ]]; then
+          echo "##vso[task.logissue type=error]Auf master/main/develop sind nur Pre-Releases erlaubt. Verwende für finale Releases einen release/*-Branch."
+          exit 1
+        fi
+        if [[ "$(versionLabel)" == "release" ]]; then
+          echo "##vso[task.logissue type=error]Das Version-Label 'release' ist auf master/main/develop nicht erlaubt."
+          exit 1
+        fi
+        echo "Default-Branch-Regeln erfolgreich geprüft."
