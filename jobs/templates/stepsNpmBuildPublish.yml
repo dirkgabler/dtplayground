@@ -44,7 +44,7 @@ steps:
 
   - task: Npm@1
     displayName: NPM set pre-release version
-    condition: and(succeeded(), eq(variables['isPreRelease'], 'true'))
+    condition: and(succeeded(), eq(coalesce(variables['isPreRelease'], 'false'), 'true'))
     inputs:
       command: custom
       customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
