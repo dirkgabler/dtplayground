@@ -13,24 +13,15 @@ steps:
 
   - bash: |
       set -euo pipefail
-      if [ -f "package-lock.json" ]; then
-        echo "package-lock.json found -> continue"
-      else
-        echo "##vso[task.logissue type=error]package-lock.json erforderlich aber nicht gefunden"
-        exit 1
-      fi
-    displayName: "Prüfe package-lock.json"
-    workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
-
-  - bash: |
-      set -euo pipefail
-      if [ -f "package.json" ]; then
-        echo "package.json found -> continue"
-      else
-        echo "##vso[task.logissue type=error]package.json erforderlich aber nicht gefunden"
-        exit 1
-      fi
-    displayName: "Prüfe package.json"
+      for f in package.json package-lock.json; do
+        if [ -f "$f" ]; then
+          echo "$f found -> continue"
+        else
+          echo "##vso[task.logissue type=error]$f erforderlich aber nicht gefunden"
+          exit 1
+        fi
+      done
+    displayName: "Prüfe package.json und package-lock.json"
     workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
 
   - bash: |
