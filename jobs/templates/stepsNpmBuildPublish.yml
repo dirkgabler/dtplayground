@@ -20,6 +20,10 @@ parameters:
   - name: publishTag
     type: string
 
+  - name: publishRegistry
+    type: string
+
+
 steps:
   - checkout: self
     submodules: true
@@ -61,7 +65,7 @@ steps:
       workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
       verbose: true
       script: |
-        npm publish --tag="${{ parameters.publishTag }}" --userconfig="${NPM_CONFIG_USERCONFIG}"
+        npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
 
   - task: Npm@1
     displayName: NPM set pre-release version
@@ -79,7 +83,7 @@ steps:
       workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
       verbose: true
       script: |
-        npm publish --tag="${{ parameters.publishTag }}" --userconfig="${NPM_CONFIG_USERCONFIG}"
+        npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
 
   - ${{ if eq(parameters.publishBuildArtifacts, true) }}:
       - ${{ each artifactPath in parameters.artifactPath }}:

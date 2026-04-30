@@ -25,6 +25,14 @@ parameters:
     type: boolean
     default: true
 
+  - name: releaseRegistryUrl
+    type: string
+    default: "https://spu.sha.vrkw.de/nexus/repository/npm-releases/"
+
+  - name: snapshotRegistryUrl
+    type: string
+    default: "https://spu.sha.vrkw.de/nexus/repository/npm-releases/"
+
   - name: tagRelease
     type: boolean
     default: true
@@ -40,8 +48,6 @@ parameters:
 jobs:
   - job: NPM_SETUP
     displayName: Vorbereitungen und Prüfungen
-    variables:
-      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
     steps:
       - checkout: self
         submodules: true
@@ -55,16 +61,15 @@ jobs:
       #
       ################################################################
 
-      # Initialisieren der NPM-Konfiguration
+      # Ausgabe der NPM-Konfiguration
       - task: Bash@3
-        displayName: NPM zusätzliche Setup
+        displayName: Npm Konfiguration ausgeben
         inputs:
           targetType: 'inline'
           workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
           script: |
             set -euo pipefail
-            echo "npmUserConfig: ${{ parameters.npmUserConfig }}"
-            npm config set @shg:registry=https://spu.sha.vrkw.de/nexus/repository/npm-releases/ --userconfig="${NPM_CONFIG_USERCONFIG}"
+            npm config list --long
 
       # Prüfen, ob package-lock.json vorhanden ist
       - bash: |
@@ -119,7 +124,7 @@ jobs:
           echo "##vso[task.setvariable variable=versionLabel;isOutput=true]"
           echo "##vso[task.setvariable variable=majorMinor;isOutput=true]$MAJOR_MINOR"
 
-          npm i --no-save semver --userconfig="${NPM_CONFIG_USERCONFIG}"
+          npm i --no-save semver --userconfig="${{ parameters.npmUserConfig }}"
           isPre=$(node -p "require('semver').prerelease(process.env.VERSION) !== null ? 'true' : 'false'")
           if [ "$isPre" = "true" ]; then
             VERSION_LABEL=$(node -e "const semver=require('semver'); const p=semver.prerelease(process.argv[1]); if(!p) process.exit(1); process.stdout.write(String(p[0]));" "$VERSION")
@@ -143,7 +148,6 @@ jobs:
     pool:
       name: Self-hosted Linux (SEU)
     variables:
-      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
       releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
       isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
       versionLabel: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.versionLabel'] ]
@@ -162,6 +166,7 @@ jobs:
           artifactPath: ${{ parameters.artifactPath }}
           publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
           retention: ${{ parameters.retention }}
+          publishRegistry: ${{ parameters.snapshotRegistryUrl }}
           publishTag: '$(versionLabel)'
 
   - job: build_release_branch_job
@@ -172,7 +177,6 @@ jobs:
     pool:
       name: Self-hosted Linux (SEU)
     variables:
-      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
       releaseNumber: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.releaseNumber'] ]
       isPreRelease: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.isPreRelease'] ]
       versionLabel: $[ dependencies.NPM_SETUP.outputs['VERSION_CHECK.versionLabel'] ]
@@ -191,4 +195,5 @@ jobs:
           artifactPath: ${{ parameters.artifactPath }}
           publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
           retention: ${{ parameters.retention }}
+          publishRegistry: ${{ parameters.releaseRegistryUrl }}
           publishTag: 'release-$(majorMinor)'
