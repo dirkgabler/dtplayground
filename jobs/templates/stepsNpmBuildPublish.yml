@@ -48,6 +48,14 @@ steps:
       customCommand: ci --userconfig=${{ parameters.npmUserConfig }}
       workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
 
+  - task: Npm@1
+    displayName: NPM set pre-release version
+    condition: and(succeeded(), eq(variables['isPreRelease'], 'true'))
+    inputs:
+      command: custom
+      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
+      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+
   - ${{ each buildCmd in parameters.npmBuildCmd }}:
       - task: Npm@1
         displayName: NPM Command '${{ buildCmd }}'
@@ -66,14 +74,6 @@ steps:
       verbose: true
       script: |
         npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
-
-  - task: Npm@1
-    displayName: NPM set pre-release version
-    condition: and(succeeded(), eq(variables['isPreRelease'], 'true'))
-    inputs:
-      command: custom
-      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
-      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
 
   - task: Bash@3
     displayName: "NPM Publish Pre-Release"
