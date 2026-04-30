@@ -26,7 +26,7 @@ steps:
 
   - bash: |
       set -euo pipefail
-      export VERSION=$(node -p "require('./package.json').version")
+      VERSION=$(node -p "require('./package.json').version")
       MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
       echo "##vso[task.setvariable variable=majorMinor]$MAJOR_MINOR"
 
