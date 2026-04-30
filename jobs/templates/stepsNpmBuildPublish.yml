@@ -70,11 +70,11 @@ steps:
         npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
 
   - ${{ if eq(parameters.publishBuildArtifacts, true) }}:
-    - ${{ each artifactPath in parameters.artifactPath }}:
-      - task: PublishPipelineArtifact@1
-        inputs:
-          targetPath: $(Build.Repository.LocalPath)/${{ parameters.projectPath }}/${{ artifactPath }}
-          artifactName: ${{ artifactPath }}
+      - ${{ each artifactPath in parameters.artifactPath }}:
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.Repository.LocalPath)/${{ parameters.projectPath }}/${{ artifactPath }}
+              artifactName: ${{ artifactPath }}
 
   - ${{ if eq(parameters.retention, true) }}:
       - task: Retention@1
