@@ -51,6 +51,12 @@ parameters:
     type: string
     default: "Self-hosted Linux (SEU)"
 
+  # Liste von Agent-Demands, die dem Pool uebergeben werden.
+  - name: poolRequirements
+    type: object
+    default:
+      - "NODE_VERSION -equals 24"
+
   # Maximale Laufzeit je Job in Minuten.
   - name: timeoutInMinutes
     type: number
@@ -68,6 +74,9 @@ jobs:
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
     pool:
       name: ${{ parameters.agentPoolName }}
+      demands:
+        - ${{ each poolRequirement in parameters.poolRequirements }}:
+            - ${{ poolRequirement }}
     variables:
       branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
     steps:
@@ -98,6 +107,9 @@ jobs:
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
     pool:
       name: ${{ parameters.agentPoolName }}
+      demands:
+        - ${{ each poolRequirement in parameters.poolRequirements }}:
+            - ${{ poolRequirement }}
     variables:
       branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
     steps:
@@ -139,6 +151,9 @@ jobs:
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
     pool:
       name: ${{ parameters.agentPoolName }}
+      demands:
+        - ${{ each poolRequirement in parameters.poolRequirements }}:
+            - ${{ poolRequirement }}
     variables:
       branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
     steps:

@@ -74,6 +74,7 @@ Zusätzliche Regeln:
 | `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry für `master`, `main` und `develop` |
 | `tagRelease` | `boolean` | `true` | Aktiviert auf Release-Branches das Erzeugen und Pushen eines annotierten Git-Tags |
 | `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool für alle Jobs |
+| `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Liste von Azure-DevOps-Demands, die unverändert an den Pool übergeben werden |
 | `timeoutInMinutes` | `number` | `30` | Maximale Laufzeit pro Job |
 
 ## Voraussetzungen
@@ -101,6 +102,8 @@ jobs:
       publishBuildArtifacts: true
       retention: true
       tagRelease: true
+      poolRequirements:
+        - NODE_VERSION -equals 24
       timeoutInMinutes: 45
 ```
 
@@ -109,4 +112,5 @@ jobs:
 - `build_other_branch_job` führt bewusst kein npm-Publish und kein Artefakt-Publish aus.
 - Das Git-Tag entspricht der finalen `version` aus der `package.json`.
 - Existiert das Tag bereits auf demselben Commit, wird kein weiterer Push ausgeführt.
+- `poolRequirements` erwartet vollständige Azure-DevOps-Demand-Ausdrücke wie `NODE_VERSION -equals 24`.
 - Für `artifactPath` werden bei der Veröffentlichung die Pfadtrenner aus dem Namen entfernt, z. B. wird `dist/` zu `dist` und `build/output/` zu `build-output`.
