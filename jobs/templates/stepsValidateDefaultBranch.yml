@@ -17,8 +17,8 @@ steps:
           echo "##vso[task.logissue type=error]Auf master/main/develop sind nur Pre-Releases erlaubt. Verwende für finale Releases einen release/*-Branch."
           exit 1
         fi
-        if [[ "$(versionLabel)" == "release" ]]; then
-          echo "##vso[task.logissue type=error]Das Version-Label 'release' ist auf master/main/develop nicht erlaubt."
+        if [[ "$(versionLabel)" != "snapshot" ]]; then
+          echo "##vso[task.logissue type=error]Auf master/main/develop muss das Version-Label 'snapshot' verwendet werden."
           exit 1
         fi
         echo "Default-Branch-Regeln erfolgreich geprüft."
