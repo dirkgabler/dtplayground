@@ -20,7 +20,8 @@ steps:
         fi
 
         BRANCH="$(Build.SourceBranch)"
-        EXPECTED="refs/heads/test_release/$(majorMinor)"
+        EXPECTED="refs/heads/release/$(majorMinor)"
+        EXPECTED="refs/heads/release/$(majorMinor)"
         if [[ "$BRANCH" != "$EXPECTED" ]]; then
           echo "##vso[task.logissue type=error]Release-Branch '$BRANCH' passt nicht zu major.minor '$(majorMinor)'. Erwartet: '$EXPECTED'."
           exit 1

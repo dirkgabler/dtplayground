@@ -89,7 +89,7 @@ jobs:
           publishTag: '$(versionLabel)'
 
   - job: build_release_branch_job
-    condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/test_release/')
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
     displayName: Release-Branch bauen
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
     pool:
