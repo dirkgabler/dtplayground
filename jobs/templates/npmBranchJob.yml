@@ -1,0 +1,92 @@
+parameters:
+  - name: jobName
+    type: string
+
+  - name: displayName
+    type: string
+
+  - name: condition
+    type: string
+
+  - name: validationTemplate
+    type: string
+    default: ''
+
+  - name: projectPath
+    type: string
+
+  - name: npmUserConfig
+    type: string
+
+  - name: artifactPath
+    type: object
+
+  - name: npmBuildCmd
+    type: object
+
+  - name: publishBuildArtifacts
+    type: boolean
+
+  - name: retention
+    type: boolean
+
+  - name: publishRegistry
+    type: string
+    default: ''
+
+  - name: publishTag
+    type: string
+    default: ''
+
+  - name: publishNpm
+    type: boolean
+    default: true
+
+  - name: tagRelease
+    type: boolean
+    default: false
+
+  - name: agentPoolName
+    type: string
+
+  - name: poolRequirements
+    type: object
+
+  - name: timeoutInMinutes
+    type: number
+
+jobs:
+  - job: ${{ parameters.jobName }}
+    condition: ${{ parameters.condition }}
+    displayName: ${{ parameters.displayName }}
+    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+    pool:
+      name: ${{ parameters.agentPoolName }}
+      demands:
+        - ${{ each poolRequirement in parameters.poolRequirements }}:
+            - ${{ poolRequirement }}
+    variables:
+      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
+    steps:
+      - template: stepsPrepare.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+
+      - ${{ if ne(parameters.validationTemplate, '') }}:
+          - template: ${{ parameters.validationTemplate }}
+            parameters:
+              projectPath: ${{ parameters.projectPath }}
+
+      - template: stepsNpmBuildPublish.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmBuildCmd: ${{ parameters.npmBuildCmd }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+          artifactPath: ${{ parameters.artifactPath }}
+          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+          retention: ${{ parameters.retention }}
+          publishRegistry: ${{ parameters.publishRegistry }}
+          publishTag: ${{ parameters.publishTag }}
+          publishNpm: ${{ parameters.publishNpm }}
+          tagRelease: ${{ parameters.tagRelease }}

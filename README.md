@@ -1,6 +1,6 @@
 # NpmBuildAndVersionJobTmpl
 
-Die Template-Datei `NpmBuildAndVersionJobTmpl.yml` definiert eine Azure-DevOps-Jobvorlage für npm-Projekte. Sie baut das Projekt branch-abhängig, prüft Versionsregeln, veröffentlicht optional npm-Pakete und kann Build-Artefakte sowie Git-Tags erzeugen.
+Die Template-Datei `NpmBuildAndVersionJobTmpl.yml` definiert eine Azure-DevOps-Jobvorlage für npm-Projekte. Sie baut das Projekt branch-abhängig, prüft Versionsregeln, veröffentlicht optional npm-Pakete und kann Build-Artefakte sowie Git-Tags erzeugen. Die gemeinsame Job-Struktur der drei Branch-Fälle ist in `jobs/templates/npmBranchJob.yml` gekapselt.
 
 ## Zweck
 
@@ -16,6 +16,12 @@ Die Vorlage standardisiert folgende Abläufe:
 - Optionales Publizieren von Pipeline-Artefakten
 - Optionales Pushen eines Git-Release-Tags
 - Optionales Setzen von Pipeline-Retention
+
+## Interne Struktur
+
+- `jobs/NpmBuildAndVersionJobTmpl.yml` orchestriert die drei Branch-Fälle `default`, `release` und `other`.
+- `jobs/templates/npmBranchJob.yml` kapselt die gemeinsame Job-Definition mit Pool, Timeout, Checkout, Prepare-Step, optionaler Branch-Validierung und Build-/Publish-Step.
+- `jobs/templates/stepsPrepare.yml`, `jobs/templates/stepsValidateDefaultBranch.yml`, `jobs/templates/stepsValidateReleaseBranch.yml` und `jobs/templates/stepsNpmBuildPublish.yml` enthalten die wiederverwendeten Schrittfolgen.
 
 ## Branch-Verhalten
 

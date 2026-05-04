@@ -63,110 +63,76 @@ parameters:
     default: 30
 
 jobs:
-  - job: build_default_branch_job
-    condition: |
-      or(
-        eq(variables['Build.SourceBranch'], 'refs/heads/master'),
-        eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-        eq(variables['Build.SourceBranch'], 'refs/heads/develop')
-      )
-    displayName: Default-Branch bauen
-    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
-    pool:
-      name: ${{ parameters.agentPoolName }}
-      demands:
-        - ${{ each poolRequirement in parameters.poolRequirements }}:
-            - ${{ poolRequirement }}
-    variables:
-      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
-    steps:
-      - template: templates/stepsPrepare.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
+  - template: templates/npmBranchJob.yml
+    parameters:
+      jobName: build_default_branch_job
+      condition: |
+        or(
+          eq(variables['Build.SourceBranch'], 'refs/heads/master'),
+          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+          eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+        )
+      displayName: Default-Branch bauen
+      validationTemplate: stepsValidateDefaultBranch.yml
+      projectPath: ${{ parameters.projectPath }}
+      npmUserConfig: ${{ parameters.npmUserConfig }}
+      artifactPath: ${{ parameters.artifactPath }}
+      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+      retention: ${{ parameters.retention }}
+      publishRegistry: ${{ parameters.snapshotRegistryUrl }}
+      publishTag: '$(versionLabel)'
+      publishNpm: true
+      tagRelease: false
+      agentPoolName: ${{ parameters.agentPoolName }}
+      poolRequirements: ${{ parameters.poolRequirements }}
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
 
-      - template: templates/stepsValidateDefaultBranch.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
+  - template: templates/npmBranchJob.yml
+    parameters:
+      jobName: build_release_branch_job
+      condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+      displayName: Release-Branch bauen
+      validationTemplate: stepsValidateReleaseBranch.yml
+      projectPath: ${{ parameters.projectPath }}
+      npmUserConfig: ${{ parameters.npmUserConfig }}
+      artifactPath: ${{ parameters.artifactPath }}
+      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+      retention: ${{ parameters.retention }}
+      publishRegistry: ${{ parameters.releaseRegistryUrl }}
+      publishTag: 'release-$(majorMinor)'
+      publishNpm: true
+      tagRelease: ${{ parameters.tagRelease }}
+      agentPoolName: ${{ parameters.agentPoolName }}
+      poolRequirements: ${{ parameters.poolRequirements }}
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
 
-      - template: templates/stepsNpmBuildPublish.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmBuildCmd: ${{ parameters.npmBuildCmd }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-          artifactPath: ${{ parameters.artifactPath }}
-          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-          retention: ${{ parameters.retention }}
-          publishRegistry: ${{ parameters.snapshotRegistryUrl }}
-          publishTag: '$(versionLabel)'
-          publishNpm: true
-
-  - job: build_release_branch_job
-    condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
-    displayName: Release-Branch bauen
-    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
-    pool:
-      name: ${{ parameters.agentPoolName }}
-      demands:
-        - ${{ each poolRequirement in parameters.poolRequirements }}:
-            - ${{ poolRequirement }}
-    variables:
-      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
-    steps:
-      - template: templates/stepsPrepare.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-
-      - template: templates/stepsValidateReleaseBranch.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-
-      - template: templates/stepsNpmBuildPublish.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmBuildCmd: ${{ parameters.npmBuildCmd }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-          artifactPath: ${{ parameters.artifactPath }}
-          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-          retention: ${{ parameters.retention }}
-          publishRegistry: ${{ parameters.releaseRegistryUrl }}
-          publishTag: 'release-$(majorMinor)'
-          publishNpm: true
-          tagRelease: ${{ parameters.tagRelease }}
-
-  - job: build_other_branch_job
-    condition: |
-      and(
-        not(
-          or(
-            eq(variables['Build.SourceBranch'], 'refs/heads/master'),
-            eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-            eq(variables['Build.SourceBranch'], 'refs/heads/develop')
-          )
-        ),
-        not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
-      )
-    displayName: Sonstigen Branch bauen
-    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
-    pool:
-      name: ${{ parameters.agentPoolName }}
-      demands:
-        - ${{ each poolRequirement in parameters.poolRequirements }}:
-            - ${{ poolRequirement }}
-    variables:
-      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
-    steps:
-      - template: templates/stepsPrepare.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-
-      - template: templates/stepsNpmBuildPublish.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmBuildCmd: ${{ parameters.npmBuildCmd }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-          artifactPath: ${{ parameters.artifactPath }}
-          publishBuildArtifacts: false
-          publishNpm: false
+  - template: templates/npmBranchJob.yml
+    parameters:
+      jobName: build_other_branch_job
+      condition: |
+        and(
+          not(
+            or(
+              eq(variables['Build.SourceBranch'], 'refs/heads/master'),
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+            )
+          ),
+          not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
+        )
+      displayName: Sonstigen Branch bauen
+      projectPath: ${{ parameters.projectPath }}
+      npmUserConfig: ${{ parameters.npmUserConfig }}
+      artifactPath: ${{ parameters.artifactPath }}
+      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      publishBuildArtifacts: false
+      retention: false
+      publishRegistry: ''
+      publishTag: ''
+      publishNpm: false
+      tagRelease: false
+      agentPoolName: ${{ parameters.agentPoolName }}
+      poolRequirements: ${{ parameters.poolRequirements }}
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
