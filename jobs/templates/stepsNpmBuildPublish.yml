@@ -40,7 +40,7 @@ steps:
     displayName: Git-Tags bereinigen und aktualisieren
     inputs:
       targetType: 'inline'
-      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      workingDirectory: $(projectWorkingPath)
       script: |
         set -euo pipefail
         git tag -l | xargs -r git tag -d
@@ -51,7 +51,7 @@ steps:
     inputs:
       command: custom
       customCommand: ci --userconfig=${{ parameters.npmUserConfig }}
-      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      workingDir: $(projectWorkingPath)
 
   - task: Npm@1
     displayName: NPM set pre-release version
@@ -59,7 +59,7 @@ steps:
     inputs:
       command: custom
       customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
-      workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      workingDir: $(projectWorkingPath)
 
   - ${{ each buildCmd in parameters.npmBuildCmd }}:
       - task: Npm@1
@@ -67,7 +67,7 @@ steps:
         inputs:
           command: custom
           customCommand: ${{ buildCmd }} --userconfig=${{ parameters.npmUserConfig }}
-          workingDir: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          workingDir: $(projectWorkingPath)
           verbose: true
 
   - ${{ if eq(parameters.publishNpm, true) }}:
@@ -76,7 +76,7 @@ steps:
         condition: succeeded()
         inputs:
           targetType: 'inline'
-          workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          workingDirectory: $(projectWorkingPath)
           verbose: true
           script: |
             npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
@@ -90,7 +90,7 @@ steps:
           BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
         inputs:
           targetType: 'inline'
-          workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          workingDirectory: $(projectWorkingPath)
           script: |
             set -euo pipefail
 
@@ -131,7 +131,7 @@ steps:
             displayName: "Artefaktname für '${{ artifactPath }}' ableiten"
             inputs:
               targetType: 'inline'
-              workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+              workingDirectory: $(projectWorkingPath)
               script: |
                 set -euo pipefail
                 ARTIFACT_PATH="${{ artifactPath }}"
@@ -146,7 +146,7 @@ steps:
                 echo "##vso[task.setvariable variable=artifactName]${ARTIFACT_NAME}"
           - task: PublishPipelineArtifact@1
             inputs:
-              targetPath: $(Build.Repository.LocalPath)/${{ parameters.projectPath }}/${{ artifactPath }}
+              targetPath: $(projectWorkingPath)/${{ artifactPath }}
               artifactName: $(artifactName)
 
   - ${{ if eq(parameters.retention, true) }}:

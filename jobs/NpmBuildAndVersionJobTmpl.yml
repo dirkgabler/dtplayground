@@ -7,7 +7,7 @@ parameters:
   # Relativer Pfad des zu bauenden npm-Projekts im Repository.
   - name: projectPath
     type: string
-    default: '/'
+    default: '.'
 
   # Verzeichnisse, die optional als Pipeline-Artefakte veroeffentlicht werden.
   - name: artifactPath

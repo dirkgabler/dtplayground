@@ -7,7 +7,7 @@ steps:
     displayName: 'Prüfe Versionsregeln für Default-Branch'
     inputs:
       targetType: 'inline'
-      workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+      workingDirectory: $(projectWorkingPath)
       script: |
         set -euo pipefail
         echo "releaseNumber=$(releaseNumber)"
