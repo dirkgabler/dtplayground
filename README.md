@@ -71,7 +71,7 @@ Zusätzliche Regeln:
 | Parameter | Typ | Standardwert | Bedeutung |
 | --- | --- | --- | --- |
 | `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc`, die für `npm ci`, Build und Publish verwendet wird |
-| `projectPath` | `string` | `.` | Relativer Projektpfad innerhalb des Repositories; `.` steht fuer das Repo-Root, fuehrendes `/` oder `./` wird aus Kompatibilitaetsgruenden normalisiert |
+| `projectPath` | `string` | `.` | Relativer Projektpfad innerhalb des Repositories; `.` steht fuer das Repo-Root, fuehrendes oder folgendes `/` sowie `./` wird normalisiert |
 | `artifactPath` | `object` | `['target/']` | Liste von Verzeichnissen, die als Pipeline-Artefakte veröffentlicht werden können; der Artefaktname wird aus dem Pfad abgeleitet |
 | `npmBuildCmd` | `object` | `['run build']` | Liste von npm-Kommandos, die nach `npm ci` ausgeführt werden |
 | `publishBuildArtifacts` | `boolean` | `false` | Aktiviert das Publizieren der in `artifactPath` definierten Artefakte |

@@ -14,29 +14,15 @@ steps:
   - bash: |
       set -euo pipefail
 
-      RAW_PROJECT_PATH='${{ parameters.projectPath }}'
-      NORMALIZED_PROJECT_PATH="${RAW_PROJECT_PATH}"
+      # projectPath bereinigen (führende/folgende Slashes und Punkte)
+      CLEAN_PATH=$(echo "${{ parameters.projectPath }}" | sed -E 's/^\.\/|\/$|^\/|\/\.$//g')
 
-      while [[ "${NORMALIZED_PROJECT_PATH}" == ./* ]]; do
-        NORMALIZED_PROJECT_PATH="${NORMALIZED_PROJECT_PATH#./}"
-      done
-      while [[ "${NORMALIZED_PROJECT_PATH}" == /* ]]; do
-        NORMALIZED_PROJECT_PATH="${NORMALIZED_PROJECT_PATH#/}"
-      done
-      while [[ "${NORMALIZED_PROJECT_PATH}" == */ ]]; do
-        NORMALIZED_PROJECT_PATH="${NORMALIZED_PROJECT_PATH%/}"
-      done
-
-      if [[ -z "${NORMALIZED_PROJECT_PATH}" || "${NORMALIZED_PROJECT_PATH}" == "." ]]; then
-        NORMALIZED_PROJECT_PATH="."
-        PROJECT_WORKING_PATH="${BUILD_REPOSITORY_LOCALPATH}"
+      if [[ -z "${CLEAN_PATH}" || "${CLEAN_PATH}" == "." ]]; then
+        PROJECT_WORKING_PATH="$(Build.SourcesDirectory)"
+        NORMALIZED_RELATIVE_PATH="."
       else
-        if [[ "${NORMALIZED_PROJECT_PATH}" == ".." || "${NORMALIZED_PROJECT_PATH}" == ../* || "${NORMALIZED_PROJECT_PATH}" == */.. || "${NORMALIZED_PROJECT_PATH}" == */../* ]]; then
-          echo "##vso[task.logissue type=error]projectPath muss innerhalb des Repositories liegen. Uebergeben: '${RAW_PROJECT_PATH}'"
-          exit 1
-        fi
-
-        PROJECT_WORKING_PATH="${BUILD_REPOSITORY_LOCALPATH}/${NORMALIZED_PROJECT_PATH}"
+        PROJECT_WORKING_PATH="$(Build.SourcesDirectory)/${CLEAN_PATH}"
+        NORMALIZED_RELATIVE_PATH="${CLEAN_PATH}"
       fi
 
       if [[ ! -d "${PROJECT_WORKING_PATH}" ]]; then
@@ -44,8 +30,8 @@ steps:
         exit 1
       fi
 
-      echo "Verwende projectPath '${NORMALIZED_PROJECT_PATH}' (${PROJECT_WORKING_PATH})."
-      echo "##vso[task.setvariable variable=projectPathNormalized]${NORMALIZED_PROJECT_PATH}"
+      echo "Verwende projectPath '${NORMALIZED_RELATIVE_PATH}' (${PROJECT_WORKING_PATH})."
+      echo "##vso[task.setvariable variable=projectPathNormalized]${NORMALIZED_RELATIVE_PATH}"
       echo "##vso[task.setvariable variable=projectWorkingPath]${PROJECT_WORKING_PATH}"
     displayName: "Normalisiere projectPath"
 
