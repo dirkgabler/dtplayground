@@ -30,6 +30,10 @@ parameters:
     type: boolean
     default: true
 
+  - name: tagRelease
+    type: boolean
+    default: false
+
 
 steps:
   - task: Bash@3
@@ -76,6 +80,50 @@ steps:
           verbose: true
           script: |
             npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
+
+  - ${{ if and(eq(parameters.publishNpm, true), eq(parameters.tagRelease, true)) }}:
+      - task: Bash@3
+        displayName: "Git-Release-Tag pushen"
+        condition: succeeded()
+        env:
+          BUILD_REQUESTEDFOR: $(Build.RequestedFor)
+          BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
+        inputs:
+          targetType: 'inline'
+          workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+          script: |
+            set -euo pipefail
+
+            TAG_NAME="$(node -p "require('./package.json').version")"
+            CURRENT_COMMIT="$(git rev-parse HEAD)"
+            TAG_USER="${BUILD_REQUESTEDFOR}"
+            TAG_MAIL="${BUILD_REQUESTEDFOREMAIL}"
+
+            echo "Verwende Release-Tag '${TAG_NAME}' fuer Commit '${CURRENT_COMMIT}'."
+            echo "Tag-Autor: '${TAG_USER}' <${TAG_MAIL}>"
+
+            if [[ -z "${TAG_USER}" || -z "${TAG_MAIL}" ]]; then
+              echo "##vso[task.logissue type=error]Build.RequestedFor oder Build.RequestedForEmail ist leer. Git-Tag kann nicht mit dem ausloesenden Benutzer erstellt werden."
+              exit 1
+            fi
+
+            git config user.name "${TAG_USER}"
+            git config user.email "${TAG_MAIL}"
+
+            if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+              TAG_COMMIT="$(git rev-list -n 1 "${TAG_NAME}")"
+
+              if [[ "${TAG_COMMIT}" != "${CURRENT_COMMIT}" ]]; then
+                echo "##vso[task.logissue type=error]Git-Tag '${TAG_NAME}' existiert bereits auf Commit '${TAG_COMMIT}', aktueller Commit ist '${CURRENT_COMMIT}'."
+                exit 1
+              fi
+
+              echo "Git-Tag '${TAG_NAME}' existiert bereits auf dem aktuellen Commit. Kein Push erforderlich."
+              exit 0
+            fi
+
+            git tag -a "${TAG_NAME}" -m "Release ${TAG_NAME}"
+            git push origin "refs/tags/${TAG_NAME}"
 
   - ${{ if eq(parameters.publishBuildArtifacts, true) }}:
       - ${{ each artifactPath in parameters.artifactPath }}:

@@ -37,14 +37,6 @@ parameters:
     type: boolean
     default: true
 
-  - name: tagUserName
-    type: string
-    default: "kwazdo"
-
-  - name: tagUserMailAdresse
-    type: string
-    default: kwazdo@shks.de
-
   - name: agentPoolName
     type: string
     default: "Self-hosted Linux (SEU)"
@@ -118,6 +110,7 @@ jobs:
           publishRegistry: ${{ parameters.releaseRegistryUrl }}
           publishTag: 'release-$(majorMinor)'
           publishNpm: true
+          tagRelease: ${{ parameters.tagRelease }}
 
   - job: build_other_branch_job
     condition: |
