@@ -1,46 +1,57 @@
 parameters:
+  # Pfad zur npm-Konfiguration fuer Installation und Publish.
   - name: npmUserConfig
     type: string
     default: '/home/kwazdo/.npmrc'
 
+  # Relativer Pfad des zu bauenden npm-Projekts im Repository.
   - name: projectPath
     type: string
     default: '/'
 
+  # Verzeichnisse, die optional als Pipeline-Artefakte veroeffentlicht werden.
   - name: artifactPath
     type: object
     default:
       - 'target/'
 
+  # Liste der npm-Build-Kommandos, die nach npm ci ausgefuehrt werden.
   - name: npmBuildCmd
     type: object
     default:
       - 'run build'
 
+  # Steuert, ob Build-Artefakte in der Pipeline publiziert werden.
   - name: publishBuildArtifacts
     type: boolean
     default: false
 
+  # Steuert, ob der Pipeline-Lauf per Retention-Task aufbewahrt wird.
   - name: retention
     type: boolean
     default: true
 
+  # Registry fuer Releases von release-Branches.
   - name: releaseRegistryUrl
     type: string
     default: "https://spu.sha.vrkw.de/nexus/repository/npm-releases/"
 
+  # Registry fuer Builds von Default-Branches und Snapshots.
   - name: snapshotRegistryUrl
     type: string
     default: "https://spu.sha.vrkw.de/nexus/repository/npm-releases/"
 
+  # Steuert, ob bei Release-Builds ein Git-Tag gepusht wird.
   - name: tagRelease
     type: boolean
     default: true
 
+  # Name des Agent-Pools, auf dem die Jobs laufen.
   - name: agentPoolName
     type: string
     default: "Self-hosted Linux (SEU)"
 
+  # Maximale Laufzeit je Job in Minuten.
   - name: timeoutInMinutes
     type: number
     default: 30
