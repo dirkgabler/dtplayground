@@ -30,14 +30,15 @@ steps:
       MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
       echo "##vso[task.setvariable variable=majorMinor]$MAJOR_MINOR"
 
-      npm i --no-save semver --userconfig="${{ parameters.npmUserConfig }}"
-      isPre=$(node -p "require('semver').prerelease(process.env.VERSION) !== null ? 'true' : 'false'")
-      echo "##vso[task.setvariable variable=isPreRelease]$isPre"
-      
-      if [ "$isPre" = "true" ]; then
-        VERSION_LABEL=$(node -e "const semver=require('semver'); const p=semver.prerelease(process.argv[1]); if(!p) process.exit(1); process.stdout.write(String(p[0]));" "$VERSION")
+      # Liest den optionalen Pre-Release-Teil direkt aus einer SemVer-Version wie
+      # 1.2.3-snapshot oder 1.2.3-release.1 und verwendet das erste Segment als Label.
+      PRERELEASE_PART="$(node -e "const version = process.env.VERSION || ''; const match = version.match(/^[0-9]+\.[0-9]+\.[0-9]+-([^+]+)(?:\+.*)?$/); process.stdout.write(match ? match[1] : '');")"
+      if [ -n "$PRERELEASE_PART" ]; then
+        echo "##vso[task.setvariable variable=isPreRelease]true"
+        VERSION_LABEL="${PRERELEASE_PART%%.*}"
         echo "##vso[task.setvariable variable=versionLabel]$VERSION_LABEL"
       else
+        echo "##vso[task.setvariable variable=isPreRelease]false"
         echo "##vso[task.setvariable variable=versionLabel]"
       fi
 
