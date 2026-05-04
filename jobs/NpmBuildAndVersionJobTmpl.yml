@@ -87,6 +87,7 @@ jobs:
           retention: ${{ parameters.retention }}
           publishRegistry: ${{ parameters.snapshotRegistryUrl }}
           publishTag: '$(versionLabel)'
+          publishNpm: true
 
   - job: build_release_branch_job
     condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
@@ -116,3 +117,37 @@ jobs:
           retention: ${{ parameters.retention }}
           publishRegistry: ${{ parameters.releaseRegistryUrl }}
           publishTag: 'release-$(majorMinor)'
+          publishNpm: true
+
+  - job: build_other_branch_job
+    condition: |
+      and(
+        not(
+          or(
+            eq(variables['Build.SourceBranch'], 'refs/heads/master'),
+            eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+            eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+          )
+        ),
+        not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
+      )
+    displayName: Sonstigen Branch bauen
+    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+    pool:
+      name: ${{ parameters.agentPoolName }}
+    variables:
+      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
+    steps:
+      - template: templates/stepsPrepare.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+
+      - template: templates/stepsNpmBuildPublish.yml
+        parameters:
+          projectPath: ${{ parameters.projectPath }}
+          npmBuildCmd: ${{ parameters.npmBuildCmd }}
+          npmUserConfig: ${{ parameters.npmUserConfig }}
+          artifactPath: ${{ parameters.artifactPath }}
+          publishBuildArtifacts: false
+          publishNpm: false
