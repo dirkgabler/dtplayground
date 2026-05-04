@@ -66,7 +66,7 @@ Zusätzliche Regeln:
 | --- | --- | --- | --- |
 | `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc`, die für `npm ci`, Build und Publish verwendet wird |
 | `projectPath` | `string` | `/` | Relativer Projektpfad innerhalb des Repositories |
-| `artifactPath` | `object` | `['target/']` | Liste von Verzeichnissen, die als Pipeline-Artefakte veröffentlicht werden können |
+| `artifactPath` | `object` | `['target/']` | Liste von Verzeichnissen, die als Pipeline-Artefakte veröffentlicht werden können; der Artefaktname wird aus dem Pfad abgeleitet |
 | `npmBuildCmd` | `object` | `['run build']` | Liste von npm-Kommandos, die nach `npm ci` ausgeführt werden |
 | `publishBuildArtifacts` | `boolean` | `false` | Aktiviert das Publizieren der in `artifactPath` definierten Artefakte |
 | `retention` | `boolean` | `true` | Aktiviert das Markieren des Pipeline-Laufs zur Aufbewahrung |
@@ -109,3 +109,4 @@ jobs:
 - `build_other_branch_job` führt bewusst kein npm-Publish und kein Artefakt-Publish aus.
 - Das Git-Tag entspricht der finalen `version` aus der `package.json`.
 - Existiert das Tag bereits auf demselben Commit, wird kein weiterer Push ausgeführt.
+- Für `artifactPath` werden bei der Veröffentlichung die Pfadtrenner aus dem Namen entfernt, z. B. wird `dist/` zu `dist` und `build/output/` zu `build-output`.

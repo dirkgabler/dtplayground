@@ -127,10 +127,27 @@ steps:
 
   - ${{ if eq(parameters.publishBuildArtifacts, true) }}:
       - ${{ each artifactPath in parameters.artifactPath }}:
+          - task: Bash@3
+            displayName: "Artefaktname für '${{ artifactPath }}' ableiten"
+            inputs:
+              targetType: 'inline'
+              workingDirectory: $(Build.Repository.LocalPath)${{ parameters.projectPath }}
+              script: |
+                set -euo pipefail
+                ARTIFACT_PATH="${{ artifactPath }}"
+                ARTIFACT_NAME="$(printf '%s' "${ARTIFACT_PATH}" | sed -E 's#^[./]+##; s#[/\\]+$##; s#[/\\]+#-#g')"
+
+                if [ -z "${ARTIFACT_NAME}" ]; then
+                  echo "##vso[task.logissue type=error]Aus artifactPath '${ARTIFACT_PATH}' konnte kein gueltiger Artefaktname abgeleitet werden."
+                  exit 1
+                fi
+
+                echo "Verwende Artefaktnamen '${ARTIFACT_NAME}' fuer Pfad '${ARTIFACT_PATH}'."
+                echo "##vso[task.setvariable variable=artifactName]${ARTIFACT_NAME}"
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: $(Build.Repository.LocalPath)/${{ parameters.projectPath }}/${{ artifactPath }}
-              artifactName: ${{ artifactPath }}
+              artifactName: $(artifactName)
 
   - ${{ if eq(parameters.retention, true) }}:
       - task: Retention@1
