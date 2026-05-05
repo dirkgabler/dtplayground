@@ -80,7 +80,6 @@ jobs:
 
       - template: stepsNpmBuildPublish.yml
         parameters:
-          projectPath: ${{ parameters.projectPath }}
           npmBuildCmd: ${{ parameters.npmBuildCmd }}
           npmUserConfig: ${{ parameters.npmUserConfig }}
           artifactPath: ${{ parameters.artifactPath }}

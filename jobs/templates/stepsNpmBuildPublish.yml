@@ -1,7 +1,4 @@
 parameters:
-  - name: projectPath
-    type: string
-
   - name: npmBuildCmd
     type: object
 
