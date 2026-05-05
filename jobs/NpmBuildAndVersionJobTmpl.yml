@@ -63,7 +63,7 @@ parameters:
     default: 30
 
 jobs:
-  - template: templates/npmBranchJob.yml
+  - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_default_branch_job
       condition: |
@@ -88,7 +88,7 @@ jobs:
       poolRequirements: ${{ parameters.poolRequirements }}
       timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
 
-  - template: templates/npmBranchJob.yml
+  - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_release_branch_job
       condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
@@ -108,7 +108,7 @@ jobs:
       poolRequirements: ${{ parameters.poolRequirements }}
       timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
 
-  - template: templates/npmBranchJob.yml
+  - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_other_branch_job
       condition: |
