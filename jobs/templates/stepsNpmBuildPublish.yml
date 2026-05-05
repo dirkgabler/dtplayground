@@ -142,6 +142,7 @@ steps:
                 echo "Verwende Artefaktnamen '${ARTIFACT_NAME}' fuer Pfad '${ARTIFACT_PATH}'."
                 echo "##vso[task.setvariable variable=artifactName]${ARTIFACT_NAME}"
           - task: PublishPipelineArtifact@1
+            displayName: "Artefakt '${{ artifactPath }}' publizieren"
             inputs:
               targetPath: $(projectWorkingPath)/${{ artifactPath }}
               artifactName: $(artifactName)
