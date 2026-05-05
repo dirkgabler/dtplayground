@@ -75,8 +75,6 @@ jobs:
 
       - ${{ if ne(parameters.validationTemplate, '') }}:
           - template: ${{ parameters.validationTemplate }}
-            parameters:
-              projectPath: ${{ parameters.projectPath }}
 
       - template: stepsNpmBuildPublish.yml
         parameters:

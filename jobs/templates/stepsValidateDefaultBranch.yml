@@ -1,7 +1,3 @@
-parameters:
-  - name: projectPath
-    type: string
-
 steps:
   - task: Bash@3
     displayName: 'Prüfe Versionsregeln für Default-Branch'
