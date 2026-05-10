@@ -57,6 +57,7 @@ parameters:
 
 jobs:
   - job: ${{ parameters.jobName }}
+    dependsOn: resolve_default_branch
     condition: ${{ parameters.condition }}
     displayName: ${{ parameters.displayName }}
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
@@ -67,6 +68,8 @@ jobs:
             - ${{ poolRequirement }}
     variables:
       branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
+      defaultBranchRef: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.defaultBranchRef'] ]
+      isDefaultBranch: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'] ]
     steps:
       - template: stepsPrepare.yml
         parameters:

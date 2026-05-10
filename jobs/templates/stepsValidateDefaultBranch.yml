@@ -6,15 +6,16 @@ steps:
       workingDirectory: $(projectWorkingPath)
       script: |
         set -euo pipefail
+        echo "defaultBranchRef=$(defaultBranchRef)"
         echo "releaseNumber=$(releaseNumber)"
         echo "isPreRelease=$(isPreRelease)"
         echo "versionLabel=$(versionLabel)"
         if [[ "$(isPreRelease)" != "true" ]]; then
-          echo "##vso[task.logissue type=error]Auf master/main/develop sind nur Pre-Releases erlaubt. Verwende für finale Releases einen release/*-Branch."
+          echo "##vso[task.logissue type=error]Auf dem Default-Branch '$(defaultBranchRef)' sind nur Pre-Releases erlaubt. Verwende für finale Releases einen release/*-Branch."
           exit 1
         fi
         if [[ "$(versionLabel)" != "snapshot" ]]; then
-          echo "##vso[task.logissue type=error]Auf master/main/develop muss das Version-Label 'snapshot' verwendet werden."
+          echo "##vso[task.logissue type=error]Auf dem Default-Branch '$(defaultBranchRef)' muss das Version-Label 'snapshot' verwendet werden."
           exit 1
         fi
         echo "Default-Branch-Regeln erfolgreich geprüft."

@@ -63,14 +63,74 @@ parameters:
     default: 30
 
 jobs:
+  - job: resolve_default_branch
+    displayName: Default-Branch aus Azure DevOps ermitteln
+    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+    pool:
+      name: ${{ parameters.agentPoolName }}
+      demands:
+        - ${{ each poolRequirement in parameters.poolRequirements }}:
+            - ${{ poolRequirement }}
+    steps:
+      - checkout: none
+
+      - task: Bash@3
+        name: resolveDefaultBranch
+        displayName: Default-Branch ermitteln
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+          SYSTEM_COLLECTIONURI: $(System.CollectionUri)
+          SYSTEM_TEAMPROJECTID: $(System.TeamProjectId)
+          BUILD_REPOSITORY_ID: $(Build.Repository.ID)
+          BUILD_SOURCEBRANCH: $(Build.SourceBranch)
+        inputs:
+          targetType: inline
+          script: |
+            set -euo pipefail
+
+            if [[ -z "${SYSTEM_ACCESSTOKEN:-}" ]]; then
+              echo "##vso[task.logissue type=error]System.AccessToken ist leer. Stelle sicher, dass das Pipeline-Token fuer Skripte verfuegbar ist."
+              exit 1
+            fi
+
+            if [[ -z "${SYSTEM_COLLECTIONURI:-}" || -z "${SYSTEM_TEAMPROJECTID:-}" || -z "${BUILD_REPOSITORY_ID:-}" ]]; then
+              echo "##vso[task.logissue type=error]Erforderliche Azure-DevOps-Kontextvariablen fehlen. Erwartet: System.CollectionUri, System.TeamProjectId, Build.Repository.ID."
+              exit 1
+            fi
+
+            API_URL="${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/git/repositories/${BUILD_REPOSITORY_ID}?api-version=7.1"
+            echo "Lese Repository-Metadaten aus Azure DevOps."
+
+            RESPONSE="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${SYSTEM_ACCESSTOKEN}" \
+              --header "Content-Type: application/json" \
+              "${API_URL}")"
+
+            DEFAULT_BRANCH_REF="$(printf '%s' "${RESPONSE}" | node -e "let data = ''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => { const parsed = JSON.parse(data); process.stdout.write(parsed.defaultBranch || ''); });")"
+
+            if [[ -z "${DEFAULT_BRANCH_REF}" ]]; then
+              echo "##vso[task.logissue type=error]Azure DevOps hat keinen Default-Branch fuer Repository '${BUILD_REPOSITORY_ID}' geliefert."
+              exit 1
+            fi
+
+            IS_DEFAULT_BRANCH="false"
+            if [[ "${BUILD_SOURCEBRANCH:-}" == "${DEFAULT_BRANCH_REF}" ]]; then
+              IS_DEFAULT_BRANCH="true"
+            fi
+
+            echo "Azure-Default-Branch: ${DEFAULT_BRANCH_REF}"
+            echo "Aktueller Branch: ${BUILD_SOURCEBRANCH:-}"
+            echo "isDefaultBranch=${IS_DEFAULT_BRANCH}"
+            echo "##vso[task.setvariable variable=defaultBranchRef;isOutput=true]${DEFAULT_BRANCH_REF}"
+            echo "##vso[task.setvariable variable=isDefaultBranch;isOutput=true]${IS_DEFAULT_BRANCH}"
+
   - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_default_branch_job
       condition: |
-        or(
-          eq(variables['Build.SourceBranch'], 'refs/heads/master'),
-          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-          eq(variables['Build.SourceBranch'], 'refs/heads/develop')
+        and(
+          succeeded(),
+          eq(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true')
         )
       displayName: Default-Branch bauen
       validationTemplate: stepsValidateDefaultBranch.yml
@@ -91,7 +151,12 @@ jobs:
   - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_release_branch_job
-      condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+      condition: |
+        and(
+          succeeded(),
+          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
+          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+        )
       displayName: Release-Branch bauen
       validationTemplate: stepsValidateReleaseBranch.yml
       projectPath: ${{ parameters.projectPath }}
@@ -113,13 +178,8 @@ jobs:
       jobName: build_other_branch_job
       condition: |
         and(
-          not(
-            or(
-              eq(variables['Build.SourceBranch'], 'refs/heads/master'),
-              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-              eq(variables['Build.SourceBranch'], 'refs/heads/develop')
-            )
-          ),
+          succeeded(),
+          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
           not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
         )
       displayName: Sonstigen Branch bauen

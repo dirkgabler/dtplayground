@@ -1,6 +1,6 @@
 # NpmBuildAndVersionJobTmpl
 
-Die Template-Datei `NpmBuildAndVersionJobTmpl.yml` definiert eine Azure-DevOps-Jobvorlage für npm-Projekte. Sie baut das Projekt branch-abhängig, prüft Versionsregeln, veröffentlicht optional npm-Pakete und kann Build-Artefakte sowie Git-Tags erzeugen. Die gemeinsame Job-Struktur der drei Branch-Fälle ist in `jobs/templates/jobsNpmBuild.yml` gekapselt.
+Die Template-Datei `NpmBuildAndVersionJobTmpl.yml` definiert eine Azure-DevOps-Jobvorlage für npm-Projekte. Sie baut das Projekt branch-abhängig, prüft Versionsregeln, veröffentlicht optional npm-Pakete und kann Build-Artefakte sowie Git-Tags erzeugen. Der Default-Branch wird dabei zur Laufzeit aus Azure DevOps gelesen. Die gemeinsame Job-Struktur der drei Branch-Fälle ist in `jobs/templates/jobsNpmBuild.yml` gekapselt.
 
 ## Zweck
 
@@ -19,18 +19,19 @@ Die Vorlage standardisiert folgende Abläufe:
 
 ## Interne Struktur
 
-- `jobs/NpmBuildAndVersionJobTmpl.yml` orchestriert die drei Branch-Fälle `default`, `release` und `other`.
+- `jobs/NpmBuildAndVersionJobTmpl.yml` ermittelt zuerst den Default-Branch aus Azure DevOps und orchestriert danach die drei Branch-Fälle `default`, `release` und `other`.
 - `jobs/templates/jobsNpmBuild.yml` kapselt die gemeinsame Job-Definition mit Pool, Timeout, Checkout, Prepare-Step, optionaler Branch-Validierung und Build-/Publish-Step.
 - `jobs/templates/stepsPrepare.yml`, `jobs/templates/stepsValidateDefaultBranch.yml`, `jobs/templates/stepsValidateReleaseBranch.yml` und `jobs/templates/stepsNpmBuildPublish.yml` enthalten die wiederverwendeten Schrittfolgen.
 
 ## Branch-Verhalten
 
-Die Vorlage erzeugt drei Jobs, von denen abhängig vom aktuellen Branch genau einer läuft:
+Die Vorlage erzeugt einen Vorab-Job und drei Build-Jobs. Abhängig vom aktuellen Branch läuft nach der Default-Branch-Ermittlung genau einer der drei Build-Jobs:
 
 | Job | Branch-Bedingung | Verhalten |
 | --- | --- | --- |
-| `build_default_branch_job` | `master`, `main`, `develop` | Erlaubt nur Pre-Releases mit Label `snapshot`, publiziert in die Snapshot-Registry |
-| `build_release_branch_job` | `release/*` | Erlaubt finale Versionen oder Pre-Releases mit Label `release`, publiziert in die Release-Registry, kann Git-Tag pushen |
+| `resolve_default_branch` | immer | Liest den konfigurierten Default-Branch des aktuellen Azure-DevOps-Repositories |
+| `build_default_branch_job` | exakt der in Azure DevOps konfigurierte Default-Branch | Erlaubt nur Pre-Releases mit Label `snapshot`, publiziert in die Snapshot-Registry |
+| `build_release_branch_job` | `release/*`, sofern nicht zugleich Default-Branch | Erlaubt finale Versionen oder Pre-Releases mit Label `release`, publiziert in die Release-Registry, kann Git-Tag pushen |
 | `build_other_branch_job` | alle übrigen Branches | Baut das Projekt ohne npm-Publish und ohne Artefakt-Publish |
 
 ## Versionslogik
@@ -46,12 +47,12 @@ Während der Vorbereitung werden aus `package.json` mehrere Pipeline-Variablen e
 
 Zusätzliche Regeln:
 
-- Auf `master`, `main` und `develop` sind nur Pre-Releases erlaubt.
-- Auf `master`, `main` und `develop` muss das Pre-Release-Label `snapshot` sein.
+- Auf dem in Azure DevOps konfigurierten Default-Branch sind nur Pre-Releases erlaubt.
+- Auf dem in Azure DevOps konfigurierten Default-Branch muss das Pre-Release-Label `snapshot` sein.
 - Auf `release/*` ist entweder eine finale Version oder ein Pre-Release mit Label `release` erlaubt.
 - Auf `release/*` muss der Branchname exakt zu `release/<major.minor>` passen, z. B. `release/1.4`.
 
-## Ablauf pro Job
+## Ablauf der Build-Jobs
 
 1. Repository auschecken
 2. `package.json` und `package-lock.json` prüfen
@@ -77,7 +78,7 @@ Zusätzliche Regeln:
 | `publishBuildArtifacts` | `boolean` | `false` | Aktiviert das Publizieren der in `artifactPath` definierten Artefakte |
 | `retention` | `boolean` | `true` | Aktiviert das Markieren des Pipeline-Laufs zur Aufbewahrung |
 | `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry für `release/*`-Builds |
-| `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry für `master`, `main` und `develop` |
+| `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry für den in Azure DevOps konfigurierten Default-Branch |
 | `tagRelease` | `boolean` | `true` | Aktiviert auf Release-Branches das Erzeugen und Pushen eines annotierten Git-Tags |
 | `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool für alle Jobs |
 | `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Liste von Azure-DevOps-Demands, die unverändert an den Pool übergeben werden |
@@ -87,6 +88,7 @@ Zusätzliche Regeln:
 
 - Das Projekt enthält `package.json` und `package-lock.json`.
 - Auf dem Build-Agent sind `node`, `npm` und `git` verfügbar.
+- Das Pipeline-Skript kann per `System.AccessToken` auf die Azure-DevOps-REST-API des aktuellen Repositories zugreifen.
 - Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry.
 - Für das Pushen von Git-Tags müssen ausreichende Schreibrechte auf das Repository vorhanden sein.
 - Für Release-Branches muss das Benennungsschema `release/<major.minor>` eingehalten werden.
