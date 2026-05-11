@@ -8,11 +8,12 @@ Die Vorlage standardisiert folgende Abläufe:
 
 - Checkout des Repositories inklusive Submodules
 - Prüfung auf `package.json` und `package-lock.json`
+- Prüfung auf einen Scoped Package Name in `package.json.name` im Format `@scope/name`
 - Ermittlung der Paketversion aus `package.json`
 - Validierung von Versions- und Branch-Regeln
 - Ausführung von `npm ci`
 - Ausführung konfigurierbarer Build-Kommandos
-- Optionales `npm publish`
+- Optionales `npm publish` mit Scoped Registry-Konfiguration
 - Optionales Publizieren von Pipeline-Artefakten
 - Optionales Pushen eines Git-Release-Tags
 - Optionales Setzen von Pipeline-Retention
@@ -40,6 +41,8 @@ Während der Vorbereitung werden aus `package.json` mehrere Pipeline-Variablen e
 
 | Variable | Bedeutung |
 | --- | --- |
+| `packageName` | Paketname aus `package.json`, muss im Format `@scope/name` vorliegen |
+| `packageScope` | Scope-Anteil aus `package.json.name`, z. B. `@acme` |
 | `releaseNumber` | vollständige Version aus `package.json` |
 | `majorMinor` | `major.minor`-Anteil der Version, z. B. `1.4` |
 | `isPreRelease` | `true`, wenn die Version einen Pre-Release-Teil enthält |
@@ -47,6 +50,7 @@ Während der Vorbereitung werden aus `package.json` mehrere Pipeline-Variablen e
 
 Zusätzliche Regeln:
 
+- `package.json.name` muss als Scoped Package Name im Format `@scope/name` gesetzt sein.
 - Auf dem in Azure DevOps konfigurierten Default-Branch sind nur Pre-Releases erlaubt.
 - Auf dem in Azure DevOps konfigurierten Default-Branch muss das Pre-Release-Label `snapshot` sein.
 - Auf `release/*` ist entweder eine finale Version oder ein Pre-Release mit Label `release` erlaubt.
@@ -56,16 +60,17 @@ Zusätzliche Regeln:
 
 1. Repository auschecken
 2. `package.json` und `package-lock.json` prüfen
-3. Versionsinformationen und Release-Metadaten ermitteln
-4. Branch-spezifische Versionsregeln prüfen
-5. Lokale Git-Tags bereinigen und Remote-Tags neu laden
-6. `npm ci` ausführen
-7. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` setzen
-8. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
-9. Optional `npm publish`
-10. Optional Git-Release-Tag erzeugen und pushen
-11. Optional Pipeline-Artefakte veröffentlichen
-12. Optional Retention für den Pipeline-Lauf setzen
+3. Scoped Package Name aus `package.json.name` prüfen und Scope ableiten
+4. Versionsinformationen und Release-Metadaten ermitteln
+5. Branch-spezifische Versionsregeln prüfen
+6. Lokale Git-Tags bereinigen und Remote-Tags neu laden
+7. `npm ci` ausführen
+8. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` setzen
+9. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
+10. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
+11. Optional Git-Release-Tag erzeugen und pushen
+12. Optional Pipeline-Artefakte veröffentlichen
+13. Optional Retention für den Pipeline-Lauf setzen
 
 ## Parameter
 
@@ -87,9 +92,10 @@ Zusätzliche Regeln:
 ## Voraussetzungen
 
 - Das Projekt enthält `package.json` und `package-lock.json`.
+- `package.json.name` ist als Scoped Package Name im Format `@scope/name` gesetzt.
 - Auf dem Build-Agent sind `node`, `npm` und `git` verfügbar.
 - Das Pipeline-Skript kann per `System.AccessToken` auf die Azure-DevOps-REST-API des aktuellen Repositories zugreifen.
-- Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry.
+- Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry fuer den verwendeten Scope.
 - Für das Pushen von Git-Tags müssen ausreichende Schreibrechte auf das Repository vorhanden sein.
 - Für Release-Branches muss das Benennungsschema `release/<major.minor>` eingehalten werden.
 

@@ -76,7 +76,26 @@ steps:
           workingDirectory: $(projectWorkingPath)
           verbose: true
           script: |
-            npm publish --tag="${{ parameters.publishTag }}" --registry="${{ parameters.publishRegistry }}" --userconfig="${{ parameters.npmUserConfig }}"
+            set -euo pipefail
+
+            PACKAGE_SCOPE="$(packageScope)"
+            PUBLISH_REGISTRY="${{ parameters.publishRegistry }}"
+
+            if [[ -z "${PACKAGE_SCOPE}" ]]; then
+              echo "##vso[task.logissue type=error]packageScope ist leer. Der Scoped Package Name aus der Vorbereitung fehlt."
+              exit 1
+            fi
+
+            if [[ -z "${PUBLISH_REGISTRY}" ]]; then
+              echo "##vso[task.logissue type=error]publishRegistry ist leer. npm publish kann nicht ausgefuehrt werden."
+              exit 1
+            fi
+
+            npm publish \
+              --tag="${{ parameters.publishTag }}" \
+              --registry="${PUBLISH_REGISTRY}" \
+              "--${PACKAGE_SCOPE}:registry=${PUBLISH_REGISTRY}" \
+              --userconfig="${{ parameters.npmUserConfig }}"
 
   - ${{ if and(eq(parameters.publishNpm, true), eq(parameters.tagRelease, true)) }}:
       - task: Bash@3

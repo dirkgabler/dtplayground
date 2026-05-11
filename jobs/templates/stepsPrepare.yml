@@ -50,6 +50,31 @@ steps:
 
   - bash: |
       set -euo pipefail
+      node <<'NODE'
+      const pkg = require('./package.json');
+      const packageName = typeof pkg.name === 'string' ? pkg.name.trim() : '';
+
+      if (!packageName) {
+        console.error("##vso[task.logissue type=error]package.json muss ein nicht-leeres Feld 'name' enthalten.");
+        process.exit(1);
+      }
+
+      const scopedNameMatch = packageName.match(/^(@[^/]+)\/[^/]+$/);
+      if (!scopedNameMatch) {
+        console.error(`##vso[task.logissue type=error]package.json.name '${packageName}' ist ungueltig. Erwartet wird ein Scoped Package Name im Format '@scope/name'.`);
+        process.exit(1);
+      }
+
+      const packageScope = scopedNameMatch[1];
+      console.log(`Verwende Paketnamen '${packageName}' mit Scope '${packageScope}'.`);
+      console.log(`##vso[task.setvariable variable=packageName]${packageName}`);
+      console.log(`##vso[task.setvariable variable=packageScope]${packageScope}`);
+      NODE
+    displayName: "Prüfe Scoped Package Name"
+    workingDirectory: $(projectWorkingPath)
+
+  - bash: |
+      set -euo pipefail
       export VERSION=$(node -p "require('./package.json').version")
       MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
       echo "##vso[task.setvariable variable=majorMinor]$MAJOR_MINOR"
