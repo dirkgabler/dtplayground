@@ -9,6 +9,7 @@ Die Vorlage standardisiert folgende Abläufe:
 - Checkout des Repositories inklusive Submodules
 - Prüfung auf `package.json` und `package-lock.json`
 - Prüfung auf einen Scoped Package Name in `package.json.name` im Format `@scope/name`
+- Prüfung, dass der verwendete Scope in der erlaubten Liste enthalten ist
 - Ermittlung der Paketversion aus `package.json`
 - Validierung von Versions- und Branch-Regeln
 - Ausführung von `npm ci`
@@ -51,6 +52,7 @@ Während der Vorbereitung werden aus `package.json` mehrere Pipeline-Variablen e
 Zusätzliche Regeln:
 
 - `package.json.name` muss als Scoped Package Name im Format `@scope/name` gesetzt sein.
+- Der Scope aus `package.json.name` muss einer der folgenden Werte sein: `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
 - Auf dem in Azure DevOps konfigurierten Default-Branch sind nur Pre-Releases erlaubt.
 - Auf dem in Azure DevOps konfigurierten Default-Branch muss das Pre-Release-Label `snapshot` sein.
 - Auf `release/*` ist entweder eine finale Version oder ein Pre-Release mit Label `release` erlaubt.
@@ -60,7 +62,7 @@ Zusätzliche Regeln:
 
 1. Repository auschecken
 2. `package.json` und `package-lock.json` prüfen
-3. Scoped Package Name aus `package.json.name` prüfen und Scope ableiten
+3. Scoped Package Name aus `package.json.name` prüfen, erlaubten Scope validieren und Scope ableiten
 4. Versionsinformationen und Release-Metadaten ermitteln
 5. Branch-spezifische Versionsregeln prüfen
 6. Lokale Git-Tags bereinigen und Remote-Tags neu laden
@@ -93,6 +95,7 @@ Zusätzliche Regeln:
 
 - Das Projekt enthält `package.json` und `package-lock.json`.
 - `package.json.name` ist als Scoped Package Name im Format `@scope/name` gesetzt.
+- Der Scope aus `package.json.name` ist einer der erlaubten Werte `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
 - Auf dem Build-Agent sind `node`, `npm` und `git` verfügbar.
 - Das Pipeline-Skript kann per `System.AccessToken` auf die Azure-DevOps-REST-API des aktuellen Repositories zugreifen.
 - Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry fuer den verwendeten Scope.

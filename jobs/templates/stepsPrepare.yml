@@ -53,24 +53,31 @@ steps:
       node <<'NODE'
       const pkg = require('./package.json');
       const packageName = typeof pkg.name === 'string' ? pkg.name.trim() : '';
+      const allowedScopes = ['bshweb', 'diamant', 'dida', 'idefx', 'kbn', 'shg'];
 
       if (!packageName) {
         console.error("##vso[task.logissue type=error]package.json muss ein nicht-leeres Feld 'name' enthalten.");
         process.exit(1);
       }
 
-      const scopedNameMatch = packageName.match(/^(@[^/]+)\/[^/]+$/);
+      const scopedNameMatch = packageName.match(/^@([^/]+)\/[^/]+$/);
       if (!scopedNameMatch) {
         console.error(`##vso[task.logissue type=error]package.json.name '${packageName}' ist ungueltig. Erwartet wird ein Scoped Package Name im Format '@scope/name'.`);
         process.exit(1);
       }
 
-      const packageScope = scopedNameMatch[1];
+      const packageScopeName = scopedNameMatch[1];
+      if (!allowedScopes.includes(packageScopeName)) {
+        console.error(`##vso[task.logissue type=error]Der Scope '${packageScopeName}' aus package.json.name '${packageName}' ist nicht erlaubt. Erlaubte Scopes: ${allowedScopes.join(', ')}.`);
+        process.exit(1);
+      }
+
+      const packageScope = `@${packageScopeName}`;
       console.log(`Verwende Paketnamen '${packageName}' mit Scope '${packageScope}'.`);
       console.log(`##vso[task.setvariable variable=packageName]${packageName}`);
       console.log(`##vso[task.setvariable variable=packageScope]${packageScope}`);
       NODE
-    displayName: "Prüfe Scoped Package Name"
+    displayName: "Prüfe Scoped Package Name und erlaubte Scopes"
     workingDirectory: $(projectWorkingPath)
 
   - bash: |
