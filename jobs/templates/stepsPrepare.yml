@@ -82,6 +82,28 @@ steps:
 
   - bash: |
       set -euo pipefail
+      node <<'NODE'
+      const pkg = require('./package.json');
+      const version = typeof pkg.version === 'string' ? pkg.version.trim() : '';
+      const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+
+      if (!version) {
+        console.error("##vso[task.logissue type=error]package.json muss ein nicht-leeres Feld 'version' enthalten.");
+        process.exit(1);
+      }
+
+      if (!semverPattern.test(version)) {
+        console.error(`##vso[task.logissue type=error]package.json.version '${version}' ist ungueltig. Erwartet wird SemVer mit numerischem major.minor.patch, z. B. '1.2.3' oder '1.2.3-snapshot'.`);
+        process.exit(1);
+      }
+
+      console.log(`Verwende gueltige SemVer-Version '${version}'.`);
+      NODE
+    displayName: "Prüfe SemVer-Version"
+    workingDirectory: $(projectWorkingPath)
+
+  - bash: |
+      set -euo pipefail
       export VERSION=$(node -p "require('./package.json').version")
       MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
       echo "##vso[task.setvariable variable=majorMinor]$MAJOR_MINOR"
