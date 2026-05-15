@@ -62,9 +62,6 @@ parameters:
     type: number
     default: 30
 
-variables:
-  - template: ../variables/ReleaseVariablesTmpl.yml
-
 jobs:
   - job: resolve_default_branch
     displayName: Default-Branch aus Azure DevOps ermitteln
@@ -158,7 +155,7 @@ jobs:
         and(
           succeeded(),
           ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          eq(variables['isReleaseBranch'], 'true')
+          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
         )
       displayName: Release-Branch bauen
       validationTemplate: stepsValidateReleaseBranch.yml
@@ -183,7 +180,7 @@ jobs:
         and(
           succeeded(),
           ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          ne(variables['isReleaseBranch'], 'true')
+          not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
         )
       displayName: Sonstigen Branch bauen
       projectPath: ${{ parameters.projectPath }}
