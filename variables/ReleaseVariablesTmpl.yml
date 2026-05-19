@@ -1,8 +1,4 @@
 variables:
-  - name: release.version
-    value:  $[variables['build.sourcebranchname']]
-  - name: build.number
-    value: $[counter(variables['release.version'], 0)]
   - name: isReleaseBranch
-    value: $[startsWith(variables['build.sourcebranch'], 'refs/heads/release/')]
+    value: $[iif(startsWith(variables['build.sourcebranch'], 'refs/heads/release/'), 'true', 'false')]
   - group: pipelines_sccm_rsc

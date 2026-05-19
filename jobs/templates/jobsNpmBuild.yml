@@ -67,9 +67,13 @@ jobs:
         - ${{ each poolRequirement in parameters.poolRequirements }}:
             - ${{ poolRequirement }}
     variables:
-      branchRunCounter: $[ counter(variables['Build.SourceBranchName'], 1) ]
-      defaultBranchRef: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.defaultBranchRef'] ]
-      isDefaultBranch: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'] ]
+      - template: ../../variables/ReleaseVariablesTmpl.yml
+      - name: branchRunCounter
+        value: $[ counter(variables['Build.SourceBranchName'], 1) ]
+      - name: defaultBranchRef
+        value: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.defaultBranchRef'] ]
+      - name: isDefaultBranch
+        value: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'] ]
     steps:
       - template: stepsPrepare.yml
         parameters:

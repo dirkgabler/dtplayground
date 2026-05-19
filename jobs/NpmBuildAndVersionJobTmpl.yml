@@ -155,7 +155,7 @@ jobs:
         and(
           succeeded(),
           ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+          eq(variables['isReleaseBranch'], 'true')
         )
       displayName: Release-Branch bauen
       validationTemplate: stepsValidateReleaseBranch.yml
@@ -180,7 +180,7 @@ jobs:
         and(
           succeeded(),
           ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          not(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
+          ne(variables['isReleaseBranch'], 'true')
         )
       displayName: Sonstigen Branch bauen
       projectPath: ${{ parameters.projectPath }}
