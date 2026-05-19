@@ -5,8 +5,12 @@ parameters:
   - name: displayName
     type: string
 
-  - name: condition
+  - name: branchType
     type: string
+    values:
+      - default
+      - release
+      - other
 
   - name: validationTemplate
     type: string
@@ -58,8 +62,27 @@ parameters:
 jobs:
   - job: ${{ parameters.jobName }}
     dependsOn: resolve_default_branch
-    condition: ${{ parameters.condition }}
     displayName: ${{ parameters.displayName }}
+    ${{ if eq(parameters.branchType, 'default') }}:
+      condition: |
+        and(
+          succeeded(),
+          eq(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true')
+        )
+    ${{ if eq(parameters.branchType, 'release') }}:
+      condition: |
+        and(
+          succeeded(),
+          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
+          eq(variables['isReleaseBranch'], 'true')
+        )
+    ${{ if eq(parameters.branchType, 'other') }}:
+      condition: |
+        and(
+          succeeded(),
+          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
+          ne(variables['isReleaseBranch'], 'true')
+        )
     timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
     pool:
       name: ${{ parameters.agentPoolName }}

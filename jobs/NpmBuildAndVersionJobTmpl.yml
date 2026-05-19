@@ -127,11 +127,7 @@ jobs:
   - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_default_branch_job
-      condition: |
-        and(
-          succeeded(),
-          eq(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true')
-        )
+      branchType: default
       displayName: Default-Branch bauen
       validationTemplate: stepsValidateDefaultBranch.yml
       projectPath: ${{ parameters.projectPath }}
@@ -151,12 +147,7 @@ jobs:
   - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_release_branch_job
-      condition: |
-        and(
-          succeeded(),
-          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          eq(variables['isReleaseBranch'], 'true')
-        )
+      branchType: release
       displayName: Release-Branch bauen
       validationTemplate: stepsValidateReleaseBranch.yml
       projectPath: ${{ parameters.projectPath }}
@@ -176,12 +167,7 @@ jobs:
   - template: templates/jobsNpmBuild.yml
     parameters:
       jobName: build_other_branch_job
-      condition: |
-        and(
-          succeeded(),
-          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          ne(variables['isReleaseBranch'], 'true')
-        )
+      branchType: other
       displayName: Sonstigen Branch bauen
       projectPath: ${{ parameters.projectPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
