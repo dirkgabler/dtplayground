@@ -33,16 +33,6 @@ parameters:
 
 
 steps:
-  - task: Bash@3
-    displayName: Git-Tags bereinigen und aktualisieren
-    inputs:
-      targetType: 'inline'
-      workingDirectory: $(projectWorkingPath)
-      script: |
-        set -euo pipefail
-        git tag -l | xargs -r git tag -d
-        git fetch --tags --force origin
-
   - task: Npm@1
     displayName: "npm ci"
     inputs:
@@ -125,6 +115,12 @@ steps:
 
             git config --local user.name "${TAG_USER}"
             git config --local user.email "${TAG_MAIL}"
+
+            if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+              git tag -d "${TAG_NAME}"
+            fi
+
+            git fetch --force origin "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}" || true
 
             if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
               TAG_COMMIT="$(git rev-list -n 1 "${TAG_NAME}")"

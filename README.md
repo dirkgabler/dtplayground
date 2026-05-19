@@ -68,14 +68,13 @@ Zusätzliche Regeln:
 4. `package.json.version` als SemVer mit numerischem `major.minor.patch` prüfen
 5. Versionsinformationen und Release-Metadaten ermitteln
 6. Branch-spezifische Versionsregeln prüfen
-7. Lokale Git-Tags bereinigen und Remote-Tags neu laden
-8. `npm ci` ausführen
-9. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` setzen
-10. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
-11. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
-12. Optional Git-Release-Tag erzeugen und pushen
-13. Optional Pipeline-Artefakte veröffentlichen
-14. Optional Retention für den Pipeline-Lauf setzen
+7. `npm ci` ausführen
+8. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` setzen
+9. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
+10. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
+11. Optional den konkreten Git-Release-Tag vom Remote synchronisieren, erzeugen und pushen
+12. Optional Pipeline-Artefakte veröffentlichen
+13. Optional Retention für den Pipeline-Lauf setzen
 
 ## Parameter
 
