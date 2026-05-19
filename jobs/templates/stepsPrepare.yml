@@ -14,8 +14,15 @@ steps:
   - bash: |
       set -euo pipefail
 
+      RAW_PATH="${{ parameters.projectPath }}"
+
+      if [[ "${RAW_PATH}" == /* ]]; then
+        echo "##vso[task.logissue type=error]projectPath muss relativ zum Repository sein. Absolute Pfade wie '${RAW_PATH}' sind nicht erlaubt."
+        exit 1
+      fi
+
       # projectPath bereinigen (führende/folgende Slashes und Punkte)
-      CLEAN_PATH=$(echo "${{ parameters.projectPath }}" | sed -E 's/^\.\/|\/$|^\/|\/\.$//g')
+      CLEAN_PATH=$(echo "${RAW_PATH}" | sed -E 's/^\.\/|\/$|\/\.$//g')
 
       if [[ -z "${CLEAN_PATH}" || "${CLEAN_PATH}" == "." ]]; then
         PROJECT_WORKING_PATH="$(Build.SourcesDirectory)"
