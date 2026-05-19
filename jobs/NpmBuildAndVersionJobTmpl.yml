@@ -26,10 +26,16 @@ parameters:
     type: boolean
     default: false
 
-  # Steuert, ob der Pipeline-Lauf per Retention-Task aufbewahrt wird.
+  # Steuert, ob der Default-Branch-Pipeline-Lauf per Retention-Lease aufbewahrt wird.
   - name: retention
     type: boolean
     default: true
+
+  # Anzahl der Retention-Tage fuer release/*-Builds.
+  # Werte groesser als 36500 werden in Azure DevOps als "forever" angezeigt.
+  - name: releaseRetentionDays
+    type: number
+    default: 36501
 
   # Registry fuer Releases von release-Branches.
   - name: releaseRegistryUrl
@@ -135,7 +141,10 @@ jobs:
       artifactPath: ${{ parameters.artifactPath }}
       npmBuildCmd: ${{ parameters.npmBuildCmd }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-      retention: ${{ parameters.retention }}
+      ${{ if eq(parameters.retention, true) }}:
+        retentionDays: 365
+      ${{ if ne(parameters.retention, true) }}:
+        retentionDays: 0
       publishRegistry: ${{ parameters.snapshotRegistryUrl }}
       publishTag: '$(versionLabel)'
       publishNpm: true
@@ -155,7 +164,7 @@ jobs:
       artifactPath: ${{ parameters.artifactPath }}
       npmBuildCmd: ${{ parameters.npmBuildCmd }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-      retention: ${{ parameters.retention }}
+      retentionDays: ${{ parameters.releaseRetentionDays }}
       publishRegistry: ${{ parameters.releaseRegistryUrl }}
       publishTag: 'release-$(majorMinor)'
       publishNpm: true
@@ -174,7 +183,7 @@ jobs:
       artifactPath: ${{ parameters.artifactPath }}
       npmBuildCmd: ${{ parameters.npmBuildCmd }}
       publishBuildArtifacts: false
-      retention: false
+      retentionDays: 0
       publishRegistry: ''
       publishTag: ''
       publishNpm: false

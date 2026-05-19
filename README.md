@@ -86,7 +86,8 @@ Zusätzliche Regeln:
 | `artifactPath` | `object` | `['target/']` | Liste von Verzeichnissen, die als Pipeline-Artefakte veröffentlicht werden können; der Artefaktname wird aus dem Pfad abgeleitet |
 | `npmBuildCmd` | `object` | `['run build']` | Liste von npm-Kommandos, die nach `npm ci` ausgeführt werden |
 | `publishBuildArtifacts` | `boolean` | `false` | Aktiviert das Publizieren der in `artifactPath` definierten Artefakte |
-| `retention` | `boolean` | `true` | Aktiviert das Markieren des Pipeline-Laufs zur Aufbewahrung |
+| `retention` | `boolean` | `true` | Aktiviert eine Retention-Lease von 365 Tagen für Builds des Azure-DevOps-Default-Branches |
+| `releaseRetentionDays` | `number` | `36501` | Anzahl der Retention-Tage für `release/*`-Builds; Werte größer als `36500` werden in Azure DevOps als `forever` angezeigt |
 | `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry für `release/*`-Builds |
 | `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry für den in Azure DevOps konfigurierten Default-Branch |
 | `tagRelease` | `boolean` | `true` | Aktiviert auf Release-Branches das Erzeugen und Pushen eines annotierten Git-Tags |
@@ -122,6 +123,7 @@ jobs:
         - dist/
       publishBuildArtifacts: true
       retention: true
+      releaseRetentionDays: 36501
       tagRelease: true
       poolRequirements:
         - NODE_VERSION -equals 24
@@ -130,9 +132,10 @@ jobs:
 
 ## Hinweise
 
-- `build_other_branch_job` führt bewusst kein npm-Publish und kein Artefakt-Publish aus.
+- `build_other_branch_job` führt bewusst kein npm-Publish, kein Artefakt-Publish und keine Retention-Lease aus.
 - Das Git-Tag entspricht der finalen `version` aus der `package.json`.
 - Existiert das Tag bereits auf demselben Commit, wird kein weiterer Push ausgeführt.
+- Release-Builds erhalten standardmäßig eine Retention-Lease von `36501` Tagen. Azure DevOps zeigt solche Leases als `forever` an.
 - `projectPath` wird vor der Verwendung normalisiert. `frontend`, `./frontend`, `frontend/` und `frontend/.` verweisen auf dasselbe Projektverzeichnis. Absolute Pfade brechen den Build mit einem Fehler ab.
 - `poolRequirements` erwartet vollständige Azure-DevOps-Demand-Ausdrücke wie `NODE_VERSION -equals 24`.
 - Für `artifactPath` werden bei der Veröffentlichung die Pfadtrenner aus dem Namen entfernt, z. B. wird `dist/` zu `dist` und `build/output/` zu `build-output`.

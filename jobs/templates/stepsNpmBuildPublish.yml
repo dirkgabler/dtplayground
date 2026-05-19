@@ -11,9 +11,9 @@ parameters:
   - name: publishBuildArtifacts
     type: boolean
 
-  - name: retention
-    type: boolean
-    default: false
+  - name: retentionDays
+    type: number
+    default: 0
 
   - name: publishTag
     type: string
@@ -166,9 +166,51 @@ steps:
               targetPath: $(projectWorkingPath)/${{ artifactPath }}
               artifactName: $(artifactName)
 
-  - ${{ if eq(parameters.retention, true) }}:
-      - task: Retention@1
-        displayName: Save pipeline run
+  - ${{ if ne(parameters.retentionDays, 0) }}:
+      - task: Bash@3
+        displayName: "Retention-Lease setzen"
+        condition: and(succeeded(), not(canceled()))
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+          SYSTEM_COLLECTIONURI: $(System.CollectionUri)
+          SYSTEM_TEAMPROJECTID: $(System.TeamProjectId)
+          SYSTEM_DEFINITIONID: $(System.DefinitionId)
+          BUILD_BUILDID: $(Build.BuildId)
         inputs:
-          months: 12
-          retainbuilds: true
+          targetType: 'inline'
+          workingDirectory: $(projectWorkingPath)
+          script: |
+            set -euo pipefail
+
+            if [[ -z "${SYSTEM_ACCESSTOKEN:-}" ]]; then
+              echo "##vso[task.logissue type=error]System.AccessToken ist leer. Stelle sicher, dass das Pipeline-Token fuer Skripte verfuegbar ist."
+              exit 1
+            fi
+
+            if [[ -z "${SYSTEM_COLLECTIONURI:-}" || -z "${SYSTEM_TEAMPROJECTID:-}" || -z "${SYSTEM_DEFINITIONID:-}" || -z "${BUILD_BUILDID:-}" ]]; then
+              echo "##vso[task.logissue type=error]Erforderliche Azure-DevOps-Kontextvariablen fehlen. Erwartet: System.CollectionUri, System.TeamProjectId, System.DefinitionId, Build.BuildId."
+              exit 1
+            fi
+
+            REQUEST_BODY="$(printf '[{"daysValid":%s,"definitionId":%s,"ownerId":"NpmBuildAndVersionJobTmpl","protectPipeline":false,"runId":%s}]' \
+              "${{ parameters.retentionDays }}" \
+              "${SYSTEM_DEFINITIONID}" \
+              "${BUILD_BUILDID}")"
+
+            API_URL="${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/build/retention/leases?api-version=7.1"
+
+            RESPONSE="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${SYSTEM_ACCESSTOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "${REQUEST_BODY}" \
+              "${API_URL}")"
+
+            LEASE_ID="$(printf '%s' "${RESPONSE}" | node -e "const payload = JSON.parse(require('fs').readFileSync(0, 'utf8')); const leases = Array.isArray(payload) ? payload : Array.isArray(payload.value) ? payload.value : []; process.stdout.write(String(leases[0]?.leaseId || ''))")"
+            VALID_UNTIL="$(printf '%s' "${RESPONSE}" | node -e "const payload = JSON.parse(require('fs').readFileSync(0, 'utf8')); const leases = Array.isArray(payload) ? payload : Array.isArray(payload.value) ? payload.value : []; process.stdout.write(String(leases[0]?.validUntil || ''))")"
+
+            if [[ -z "${LEASE_ID}" ]]; then
+              echo "##vso[task.logissue type=error]Azure DevOps hat keine Lease-ID fuer den Pipeline-Lauf zurueckgegeben."
+              exit 1
+            fi
+
+            echo "Retention-Lease ${LEASE_ID} fuer ${BUILD_BUILDID} gesetzt (${VALID_UNTIL})."

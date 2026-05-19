@@ -31,8 +31,8 @@ parameters:
   - name: publishBuildArtifacts
     type: boolean
 
-  - name: retention
-    type: boolean
+  - name: retentionDays
+    type: number
 
   - name: publishRegistry
     type: string
@@ -112,7 +112,7 @@ jobs:
           npmUserConfig: ${{ parameters.npmUserConfig }}
           artifactPath: ${{ parameters.artifactPath }}
           publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-          retention: ${{ parameters.retention }}
+          retentionDays: ${{ parameters.retentionDays }}
           publishRegistry: ${{ parameters.publishRegistry }}
           publishTag: ${{ parameters.publishTag }}
           publishNpm: ${{ parameters.publishNpm }}
