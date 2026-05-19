@@ -106,7 +106,7 @@ jobs:
               --header "Content-Type: application/json" \
               "${API_URL}")"
 
-            DEFAULT_BRANCH_REF="$(printf '%s' "${RESPONSE}" | node -e "let data = ''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => { const parsed = JSON.parse(data); process.stdout.write(parsed.defaultBranch || ''); });")"
+            DEFAULT_BRANCH_REF="$(printf '%s' "${RESPONSE}" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0, 'utf8')).defaultBranch || '')")"
 
             if [[ -z "${DEFAULT_BRANCH_REF}" ]]; then
               echo "##vso[task.logissue type=error]Azure DevOps hat keinen Default-Branch fuer Repository '${BUILD_REPOSITORY_ID}' geliefert."
