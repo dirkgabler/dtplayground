@@ -105,13 +105,13 @@ steps:
             TAG_USER="${BUILD_REQUESTEDFOR}"
             TAG_MAIL="${BUILD_REQUESTEDFOREMAIL}"
 
-            echo "Verwende Release-Tag '${TAG_NAME}' fuer Commit '${CURRENT_COMMIT}'."
-            echo "Tag-Autor: '${TAG_USER}' <${TAG_MAIL}>"
-
             if [[ -z "${TAG_USER}" || -z "${TAG_MAIL}" ]]; then
               echo "##vso[task.logissue type=error]Build.RequestedFor oder Build.RequestedForEmail ist leer. Git-Tag kann nicht mit dem ausloesenden Benutzer erstellt werden."
               exit 1
             fi
+
+            echo "Verwende Release-Tag '${TAG_NAME}' fuer Commit '${CURRENT_COMMIT}'."
+            echo "Tag-Autor: '${TAG_USER}' <${TAG_MAIL}>"
 
             git config --local user.name "${TAG_USER}"
             git config --local user.email "${TAG_MAIL}"
