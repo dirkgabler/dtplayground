@@ -37,52 +37,48 @@ stages:
 
         steps:
           - bash: |
-              # Standard-Version definieren
-              FALLBACK_VERSION="5.5.0.6356"
-              VERSION=""
-              
-              # 1. Versuch: Version aus Nexus ermitteln
-              # Hinweis: Die URL muss ggf. an das tatsächliche Maven-Repository im Nexus angepasst werden.
-              NEXUS_METADATA_URL="https://spu.sha.vrkw.de/nexus/repository/maven-public/org/sonarsource/scanner/maven/sonar-maven-plugin/maven-metadata.xml"
-              echo "Prüfe Nexus auf aktuelle Version: $NEXUS_METADATA_URL"
-              
-              # Abruf der Metadaten mit Timeout
-              XML_CONTENT=$(curl -s --connect-timeout 5 "$NEXUS_METADATA_URL")
-              
-              if [ $? -eq 0 ] && [ ! -z "$XML_CONTENT" ]; then
-                # Extrahiere Version aus <release> Tag
-                NEXUS_VERSION=$(echo "$XML_CONTENT" | sed -n 's/.*<release>\(.*\)<\/release>.*/\1/p')
-                if [ ! -z "$NEXUS_VERSION" ]; then
-                  VERSION="$NEXUS_VERSION"
-                  echo "Dynamische Version aus Nexus ermittelt: $VERSION"
-                fi
-              fi
-              
-              # 2. Versuch: Falls Nexus nicht erfolgreich, bisherige Logik (Umgebungsvariable / Datei)
-              if [ -z "$VERSION" ]; then
-                if [ ! -z "$SONAR_MAVEN_PLUGIN_VERSION" ]; then
-                  VERSION="$SONAR_MAVEN_PLUGIN_VERSION"
-                  echo "Dynamische Version aus Umgebungsvariable SONAR_MAVEN_PLUGIN_VERSION gefunden: $VERSION"
-                elif [ -f "/etc/sonar_plugin_version" ]; then
-                  VERSION=$(cat /etc/sonar_plugin_version)
-                  echo "Dynamische Version aus /etc/sonar_plugin_version gefunden: $VERSION"
-                else
-                  VERSION="$FALLBACK_VERSION"
-                  echo "Keine dynamische Version gefunden, nutze Fallback: $VERSION"
-                fi
-              fi
-              
-              # Goals auflösen: Falls der Parameter dem Default entspricht, nutzen wir die dynamische Version.
-              # Ansonsten hat die manuelle Eingabe des Benutzers Vorrang.
               PARAM_GOALS="${{ parameters.sonarQubeBuildGoals }}"
+              # Der hier definierte Standard-Wert muss mit dem 'default' des Parameters 'sonarQubeBuildGoals' übereinstimmen.
               DEFAULT_GOALS="verify org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar"
               
               if [ "$PARAM_GOALS" == "$DEFAULT_GOALS" ]; then
+                echo "Parameter entspricht Default. Suche nach dynamischer Version..."
+                VERSION=""
+                
+                # 1. Versuch: Version via Maven aus Nexus ermitteln (nutzt lokale credentials/settings.xml)
+                echo "Suche aktuelle Version via Maven (dependency:get)..."
+                # Wir nutzen RELEASE für die aktuellste stabile Version und :pom um den Download klein zu halten
+                MVN_OUT=$(mvn dependency:get -Dartifact=org.sonarsource.scanner.maven:sonar-maven-plugin:RELEASE:pom -Dtransitive=false --batch-mode 2>/dev/null)
+                
+                if [ $? -eq 0 ]; then
+                  NEXUS_VERSION=$(echo "$MVN_OUT" | grep "Resolved artifact" | sed -n 's/.*:\(.*\)/\1/p')
+                  if [ ! -z "$NEXUS_VERSION" ]; then
+                    VERSION="$NEXUS_VERSION"
+                    echo "Dynamische Version via Maven ermittelt: $VERSION"
+                  fi
+                fi
+                
+                # 2. Versuch: Umgebungsvariable oder lokale Datei
+                if [ -z "$VERSION" ]; then
+                  if [ ! -z "$SONAR_MAVEN_PLUGIN_VERSION" ]; then
+                    VERSION="$SONAR_MAVEN_PLUGIN_VERSION"
+                    echo "Version aus Umgebungsvariable gefunden: $VERSION"
+                  elif [ -f "/etc/sonar_plugin_version" ]; then
+                    VERSION=$(cat /etc/sonar_plugin_version)
+                    echo "Version aus /etc/sonar_plugin_version gefunden: $VERSION"
+                  fi
+                fi
+                
+                # Fallback: Version aus dem Parameter-Default extrahieren
+                if [ -z "$VERSION" ]; then
+                  VERSION=$(echo "$PARAM_GOALS" | sed -n 's/.*sonar-maven-plugin:\([^:]*\):.*/\1/p')
+                  echo "Keine dynamische Version gefunden, nutze Version aus Parameter-Default: $VERSION"
+                fi
+                
                 RESOLVED_GOALS="verify org.sonarsource.scanner.maven:sonar-maven-plugin:$VERSION:sonar"
-                echo "Parameter entspricht Default. Setze Goals auf: $RESOLVED_GOALS"
               else
+                echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS"
                 RESOLVED_GOALS="$PARAM_GOALS"
-                echo "Benutzerdefinierte Goals erkannt: $RESOLVED_GOALS"
               fi
               
               echo "##vso[task.setvariable variable=resolvedSonarGoals]$RESOLVED_GOALS"
