@@ -48,14 +48,21 @@ stages:
                 # 1. Versuch: Version via Maven aus Nexus ermitteln (nutzt lokale credentials/settings.xml)
                 echo "Suche aktuelle Version via Maven (dependency:get)..."
                 # Wir nutzen RELEASE für die aktuellste stabile Version und :pom um den Download klein zu halten
-                MVN_OUT=$(mvn dependency:get -Dartifact=org.sonarsource.scanner.maven:sonar-maven-plugin:RELEASE:pom -Dtransitive=false --batch-mode 2>/dev/null)
+                # -e zeigt Fehlermeldungen detaillierter, 2>&1 fängt auch stderr ab
+                MVN_OUT=$(mvn dependency:get -Dartifact=org.sonarsource.scanner.maven:sonar-maven-plugin:RELEASE:pom -Dtransitive=false --batch-mode -e 2>&1)
+                MVN_RET=$?
                 
-                if [ $? -eq 0 ]; then
+                if [ $MVN_RET -eq 0 ]; then
                   NEXUS_VERSION=$(echo "$MVN_OUT" | grep "Resolved artifact" | sed -n 's/.*:\(.*\)/\1/p')
                   if [ ! -z "$NEXUS_VERSION" ]; then
                     VERSION="$NEXUS_VERSION"
                     echo "Dynamische Version via Maven ermittelt: $VERSION"
                   fi
+                else
+                  echo "Maven-Aufruf fehlgeschlagen (Exit Code: $MVN_RET). Überprüfe die Nexus-Erreichbarkeit und Credentials."
+                  echo "--- Maven Output Start ---"
+                  echo "$MVN_OUT"
+                  echo "--- Maven Output Ende ---"
                 fi
                 
                 # 2. Versuch: Umgebungsvariable oder lokale Datei
