@@ -58,7 +58,7 @@ Zusätzliche Regeln:
 - Auf dem in Azure DevOps konfigurierten Default-Branch sind nur Pre-Releases erlaubt.
 - Auf dem in Azure DevOps konfigurierten Default-Branch muss das Pre-Release-Label `snapshot` sein.
 - Auf `release/*` ist entweder eine finale Version oder ein Pre-Release mit Label `release` erlaubt.
-- Auf `release/*` muss der Branchname exakt zu `release/<major.minor>` passen, z. B. `release/1.4`.
+- Auf `release/*` muss der Branchname mit `release/<major.minor>` beginnen, z. B. `release/1.4` oder `release/1.4.2`.
 
 ## Ablauf der Build-Jobs
 
@@ -104,7 +104,7 @@ Zusätzliche Regeln:
 - Das Pipeline-Skript kann per `System.AccessToken` auf die Azure-DevOps-REST-API des aktuellen Repositories zugreifen.
 - Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry fuer den verwendeten Scope.
 - Für das Pushen von Git-Tags müssen ausreichende Schreibrechte auf das Repository vorhanden sein.
-- Für Release-Branches muss das Benennungsschema `release/<major.minor>` eingehalten werden.
+- Für Release-Branches muss der Branchname mit `release/<major.minor>` beginnen.
 
 ## Einbindungsbeispiel
 
