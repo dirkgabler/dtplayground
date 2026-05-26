@@ -11,7 +11,7 @@ parameters:
   - name: sonarQubeBuildGoals
     displayName: "Maven Goals zur Ausführung von Sonarqube"
     type: string
-    default: 'verify org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar'
+    default: 'verify org.sonarsource.scanner.maven:sonar-maven-plugin:__LATEST__:sonar'
   - name: sonarQubeServiceConnection
     displayName: "Sonarqube Service Connection (konfiguriert im Azure DevOps Projekt)"
     type: string
@@ -36,33 +36,50 @@ stages:
           NODE_EXTRA_CA_CERTS: /jenkins_trans/tool/cert/rootca1.pem
 
         steps:
+          - task: Maven@4
+            displayName: 'Lade Sonar Maven Plugin Metadaten aus Nexus'
+            continueOnError: true
+            inputs:
+              mavenPomFile: $(Build.Repository.LocalPath)${{ parameters.pomPath }}/pom.xml
+              mavenOptions: -Xmx1024m
+              goals: dependency:get
+              options: >-
+                -Dartifact=org.sonarsource.scanner.maven:sonar-maven-plugin:RELEASE:pom
+                -Dtransitive=false
+                --batch-mode
+                -e
+
           - bash: |
               PARAM_GOALS="${{ parameters.sonarQubeBuildGoals }}"
-              # Der hier definierte Standard-Wert muss mit dem 'default' des Parameters 'sonarQubeBuildGoals' übereinstimmen.
-              DEFAULT_GOALS="verify org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar"
+              DEFAULT_VERSION_TOKEN="__LATEST__"
               
-              if [ "$PARAM_GOALS" == "$DEFAULT_GOALS" ]; then
+              if echo "$PARAM_GOALS" | grep -q "sonar-maven-plugin:${DEFAULT_VERSION_TOKEN}:sonar"; then
                 echo "Parameter entspricht Default. Suche nach dynamischer Version..."
                 VERSION=""
                 
-                # 1. Versuch: Version via Maven aus Nexus ermitteln (nutzt lokale credentials/settings.xml)
-                echo "Suche aktuelle Version via Maven (dependency:get)..."
-                # Wir nutzen RELEASE für die aktuellste stabile Version und :pom um den Download klein zu halten
-                # -e zeigt Fehlermeldungen detaillierter, 2>&1 fängt auch stderr ab
-                MVN_OUT=$(mvn dependency:get -Dartifact=org.sonarsource.scanner.maven:sonar-maven-plugin:RELEASE:pom -Dtransitive=false --batch-mode -e 2>&1)
-                MVN_RET=$?
-                
-                if [ $MVN_RET -eq 0 ]; then
-                  NEXUS_VERSION=$(echo "$MVN_OUT" | grep "Resolved artifact" | sed -n 's/.*:\(.*\)/\1/p')
-                  if [ ! -z "$NEXUS_VERSION" ]; then
-                    VERSION="$NEXUS_VERSION"
-                    echo "Dynamische Version via Maven ermittelt: $VERSION"
+                # 1. Versuch: Version via Maven aus Nexus ermitteln.
+                # Der vorangehende Maven-Task lädt die Metadaten mit den konfigurierten Maven-Credentials.
+                echo "Suche aktuelle Version in den von Maven geladenen Metadaten..."
+                META_DIR="${HOME}/.m2/repository/org/sonarsource/scanner/maven/sonar-maven-plugin"
+                if [ -d "$META_DIR" ]; then
+                  METADATA_FILE=$(find "$META_DIR" -maxdepth 1 \( -name 'maven-metadata-*.xml' -o -name 'maven-metadata.xml' \) | head -n 1)
+                  if [ -n "$METADATA_FILE" ] && [ -f "$METADATA_FILE" ]; then
+                    echo "Nutze Metadaten aus: $METADATA_FILE"
+                    VERSION=$(sed -n 's:.*<release>\(.*\)</release>.*:\1:p' "$METADATA_FILE" | head -n 1)
+                    if [ -z "$VERSION" ]; then
+                      VERSION=$(sed -n 's:.*<latest>\(.*\)</latest>.*:\1:p' "$METADATA_FILE" | head -n 1)
+                    fi
+                    if [ -z "$VERSION" ]; then
+                      VERSION=$(grep -o '<version>[^<]*</version>' "$METADATA_FILE" | sed 's#</\?version>##g' | sort -V | tail -n 1)
+                    fi
+                    if [ -n "$VERSION" ]; then
+                      echo "Dynamische Version via Maven-Metadaten ermittelt: $VERSION"
+                    fi
+                  else
+                    echo "Keine Maven-Metadaten fuer sonar-maven-plugin gefunden."
                   fi
                 else
-                  echo "Maven-Aufruf fehlgeschlagen (Exit Code: $MVN_RET). Überprüfe die Nexus-Erreichbarkeit und Credentials."
-                  echo "--- Maven Output Start ---"
-                  echo "$MVN_OUT"
-                  echo "--- Maven Output Ende ---"
+                  echo "Lokales Maven-Repository fuer sonar-maven-plugin wurde nicht angelegt."
                 fi
                 
                 # 2. Versuch: Umgebungsvariable oder lokale Datei
@@ -79,6 +96,10 @@ stages:
                 # Fallback: Version aus dem Parameter-Default extrahieren
                 if [ -z "$VERSION" ]; then
                   VERSION=$(echo "$PARAM_GOALS" | sed -n 's/.*sonar-maven-plugin:\([^:]*\):.*/\1/p')
+                  if [ "$VERSION" = "$DEFAULT_VERSION_TOKEN" ]; then
+                    echo "Keine dynamische Version gefunden und kein statischer Fallback in den Goals vorhanden."
+                    exit 1
+                  fi
                   echo "Keine dynamische Version gefunden, nutze Version aus Parameter-Default: $VERSION"
                 fi
                 
