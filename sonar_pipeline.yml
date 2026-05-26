@@ -40,6 +40,7 @@ stages:
         steps:
           - bash: |
               PARAM_GOALS="${{ parameters.sonarQubeBuildGoals }}"
+              GOALS_VERSION_PLACEHOLDER='$(SONAR_PLUGIN_VERSION)'
               RESOLVED_PLUGIN_VERSION="${SONAR_PLUGIN_VERSION:-$SONAR_PLUGIN_VERSION_FALLBACK}"
               
               if [ -n "${SONAR_PLUGIN_VERSION:-}" ]; then
@@ -48,9 +49,9 @@ stages:
                 echo "SONAR_PLUGIN_VERSION nicht gesetzt. Verwende Fallback-Version: $RESOLVED_PLUGIN_VERSION"
               fi
 
-              if echo "$PARAM_GOALS" | grep -q "sonar-maven-plugin:\$(SONAR_PLUGIN_VERSION):sonar"; then
+              if echo "$PARAM_GOALS" | grep -Fq "sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"; then
                 echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
-                RESOLVED_GOALS=$(echo "$PARAM_GOALS" | sed "s|\$(SONAR_PLUGIN_VERSION)|$RESOLVED_PLUGIN_VERSION|g")
+                RESOLVED_GOALS="${PARAM_GOALS//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION}"
               else
                 echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS"
                 RESOLVED_GOALS="$PARAM_GOALS"
