@@ -39,7 +39,7 @@ stages:
 
         steps:
           - bash: |
-              PARAM_GOALS="${{ parameters.sonarQubeBuildGoals }}"
+              PARAM_GOALS="$PARAM_GOALS_RAW"
               GOALS_VERSION_PLACEHOLDER='$(SONAR_PLUGIN_VERSION)'
               RESOLVED_PLUGIN_VERSION="${SONAR_PLUGIN_VERSION:-$SONAR_PLUGIN_VERSION_FALLBACK}"
               
@@ -61,6 +61,7 @@ stages:
               echo "##vso[task.setvariable variable=resolvedSonarGoals]$RESOLVED_GOALS"
             displayName: 'Dynamische Ermittlung der SonarQube Goals'
             env:
+              PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
               SONAR_PLUGIN_VERSION: $(SONAR_PLUGIN_VERSION)
               SONAR_PLUGIN_VERSION_FALLBACK: $(sonarPluginVersionFallback)
 
