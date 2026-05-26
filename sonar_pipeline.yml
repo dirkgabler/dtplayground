@@ -41,9 +41,15 @@ stages:
           - bash: |
               PARAM_GOALS="$PARAM_GOALS_RAW"
               GOALS_VERSION_PLACEHOLDER='$(SONAR_PLUGIN_VERSION)'
-              RESOLVED_PLUGIN_VERSION="${SONAR_PLUGIN_VERSION:-$SONAR_PLUGIN_VERSION_FALLBACK}"
+              EFFECTIVE_SONAR_PLUGIN_VERSION="$SONAR_PLUGIN_VERSION"
+
+              if [ -z "$EFFECTIVE_SONAR_PLUGIN_VERSION" ] || [ "$EFFECTIVE_SONAR_PLUGIN_VERSION" = "$GOALS_VERSION_PLACEHOLDER" ]; then
+                EFFECTIVE_SONAR_PLUGIN_VERSION=""
+              fi
+
+              RESOLVED_PLUGIN_VERSION="${EFFECTIVE_SONAR_PLUGIN_VERSION:-$SONAR_PLUGIN_VERSION_FALLBACK}"
               
-              if [ -n "${SONAR_PLUGIN_VERSION:-}" ]; then
+              if [ -n "$EFFECTIVE_SONAR_PLUGIN_VERSION" ]; then
                 echo "Verwende SONAR_PLUGIN_VERSION aus der Variable Group: $RESOLVED_PLUGIN_VERSION"
               else
                 echo "SONAR_PLUGIN_VERSION nicht gesetzt. Verwende Fallback-Version: $RESOLVED_PLUGIN_VERSION"
