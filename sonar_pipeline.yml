@@ -28,6 +28,8 @@ variables:
   - group: pipelines_sccm_rsc
   - name: sonarPluginVersionFallback
     value: '5.5.0.6356'
+  - name: resolvedSonarPluginVersion
+    value: $[ coalesce(variables['SONAR_PLUGIN_VERSION'], variables['sonarPluginVersionFallback']) ]
 
 stages:
   - stage: MAVEN_SonarQube
@@ -41,13 +43,14 @@ stages:
           - bash: |
               PARAM_GOALS="$PARAM_GOALS_RAW"
               GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
-              RESOLVED_PLUGIN_VERSION="${SONAR_PLUGIN_VERSION:-$SONAR_PLUGIN_VERSION_FALLBACK}"
+              RESOLVED_PLUGIN_VERSION="$RESOLVED_PLUGIN_VERSION_RAW"
               
-              if [ -n "${SONAR_PLUGIN_VERSION:-}" ]; then
-                echo "Verwende SONAR_PLUGIN_VERSION aus der Variable Group: $RESOLVED_PLUGIN_VERSION"
-              else
-                echo "SONAR_PLUGIN_VERSION nicht gesetzt. Verwende Fallback-Version: $RESOLVED_PLUGIN_VERSION"
+              if [ -z "$RESOLVED_PLUGIN_VERSION" ]; then
+                echo "Es konnte keine Sonar-Plugin-Version aufgeloest werden."
+                exit 1
               fi
+
+              echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION"
 
               if echo "$PARAM_GOALS" | grep -Fq "sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"; then
                 echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
@@ -62,8 +65,7 @@ stages:
             displayName: 'Dynamische Ermittlung der SonarQube Goals'
             env:
               PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
-              SONAR_PLUGIN_VERSION: $(SONAR_PLUGIN_VERSION)
-              SONAR_PLUGIN_VERSION_FALLBACK: $(sonarPluginVersionFallback)
+              RESOLVED_PLUGIN_VERSION_RAW: $(resolvedSonarPluginVersion)
 
           - task: SonarQubePrepare@7
             inputs:
