@@ -26,6 +26,7 @@ pool:
 
 variables:
   - group: pipelines_sccm_rsc
+  - group: variables_sccm
   - name: sonarPluginVersionFallback
     value: '5.5.0.6356'
   - name: resolvedSonarPluginVersion
