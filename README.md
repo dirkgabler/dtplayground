@@ -8,6 +8,7 @@ Die Vorlage standardisiert folgende Abläufe:
 
 - Checkout des Repositories inklusive Submodules
 - Prüfung auf `package.json` und `package-lock.json`
+- Prüfung, dass `package.json` keine `preversion`-, `version`- oder `postversion`-Skripte definiert
 - Prüfung auf einen Scoped Package Name in `package.json.name` im Format `@scope/name`
 - Prüfung, dass der verwendete Scope in der erlaubten Liste enthalten ist
 - Prüfung, dass `package.json.version` SemVer mit numerischem `major.minor.patch` verwendet
@@ -64,17 +65,18 @@ Zusätzliche Regeln:
 
 1. Repository auschecken
 2. `package.json` und `package-lock.json` prüfen
-3. Scoped Package Name aus `package.json.name` prüfen, erlaubten Scope validieren und Scope ableiten
-4. `package.json.version` als SemVer mit numerischem `major.minor.patch` prüfen
-5. Versionsinformationen und Release-Metadaten ermitteln
-6. Branch-spezifische Versionsregeln prüfen
-7. `npm ci` ausführen
-8. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` setzen
-9. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
-10. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
-11. Optional den konkreten Git-Release-Tag vom Remote synchronisieren, erzeugen und pushen
-12. Optional Pipeline-Artefakte veröffentlichen
-13. Optional Retention für den Pipeline-Lauf setzen
+3. Prüfung, dass `package.json` keine `preversion`-, `version`- oder `postversion`-Skripte definiert
+4. Scoped Package Name aus `package.json.name` prüfen, erlaubten Scope validieren und Scope ableiten
+5. `package.json.version` als SemVer mit numerischem `major.minor.patch` prüfen
+6. Versionsinformationen und Release-Metadaten ermitteln
+7. Branch-spezifische Versionsregeln prüfen
+8. `npm ci` ausführen
+9. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` per `npm version --ignore-scripts` setzen
+10. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
+11. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
+12. Optional den konkreten Git-Release-Tag vom Remote synchronisieren, erzeugen und pushen
+13. Optional Pipeline-Artefakte veröffentlichen
+14. Optional Retention für den Pipeline-Lauf setzen
 
 ## Parameter
 
@@ -97,6 +99,7 @@ Zusätzliche Regeln:
 ## Voraussetzungen
 
 - Das Projekt enthält `package.json` und `package-lock.json`.
+- `package.json` definiert keine npm Lifecycle-Skripte `preversion`, `version` oder `postversion`, da das Template `npm version` mit `--ignore-scripts` ausführt.
 - `package.json.name` ist als Scoped Package Name im Format `@scope/name` gesetzt.
 - Der Scope aus `package.json.name` ist einer der erlaubten Werte `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
 - `package.json.version` ist SemVer-konform und verwendet numerisches `major.minor.patch`.

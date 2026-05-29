@@ -45,7 +45,7 @@ steps:
     condition: and(succeeded(), eq(coalesce(variables['isPreRelease'], 'false'), 'true'))
     inputs:
       command: custom
-      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --userconfig=${{ parameters.npmUserConfig }}
+      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --ignore-scripts --userconfig=${{ parameters.npmUserConfig }}
       workingDir: $(projectWorkingPath)
 
   - ${{ each buildCmd in parameters.npmBuildCmd }}:

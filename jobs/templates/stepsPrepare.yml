@@ -59,6 +59,27 @@ steps:
       set -euo pipefail
       node <<'NODE'
       const pkg = require('./package.json');
+      const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts !== null ? pkg.scripts : {};
+      const blockedScripts = ['preversion', 'version', 'postversion'].filter((name) =>
+        Object.prototype.hasOwnProperty.call(scripts, name)
+      );
+
+      if (blockedScripts.length > 0) {
+        console.error(
+          `##vso[task.logissue type=error]package.json enthaelt nicht unterstuetzte npm Lifecycle-Skripte (${blockedScripts.join(', ')}). Das Template fuehrt 'npm version' mit deaktivierten Scripts aus. Konsumenten-Pipelines muessen die betroffene Logik gegebenenfalls in explizite Pipeline-Schritte oder npmBuildCmd migrieren.`
+        );
+        process.exit(1);
+      }
+
+      console.log('Keine blockierten npm Lifecycle-Skripte fuer npm version gefunden.');
+      NODE
+    displayName: "Prüfe blockierte npm version-Skripte"
+    workingDirectory: $(projectWorkingPath)
+
+  - bash: |
+      set -euo pipefail
+      node <<'NODE'
+      const pkg = require('./package.json');
       const packageName = typeof pkg.name === 'string' ? pkg.name.trim() : '';
       const allowedScopes = ['bshweb', 'diamant', 'dida', 'idefx', 'kbn', 'shg'];
 
