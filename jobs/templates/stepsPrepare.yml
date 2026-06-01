@@ -59,7 +59,8 @@ steps:
       set -euo pipefail
       node <<'NODE'
       const pkg = require('./package.json');
-      const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts !== null ? pkg.scripts : {};
+      const scripts =
+        typeof pkg?.scripts === 'object' && pkg.scripts !== null ? pkg.scripts : {};
       const blockedScripts = ['preversion', 'version', 'postversion'].filter((name) =>
         Object.prototype.hasOwnProperty.call(scripts, name)
       );
