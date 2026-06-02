@@ -1,115 +1,72 @@
-# NpmBuildAndVersionJobTmpl
+# Build And Version Templates
 
-Die Template-Datei `NpmBuildAndVersionJobTmpl.yml` definiert eine Azure-DevOps-Jobvorlage für npm-Projekte. Sie baut das Projekt branch-abhängig, prüft Versionsregeln, veröffentlicht optional npm-Pakete und kann Build-Artefakte sowie Git-Tags erzeugen. Der Default-Branch wird dabei zur Laufzeit aus Azure DevOps gelesen. Die gemeinsame Job-Struktur der drei Branch-Fälle ist in `jobs/templates/jobsNpmBuild.yml` gekapselt.
+Das Repository enthaelt Azure-DevOps-Jobvorlagen fuer Node-/npm-Pakete und Angular-Libraries. Beide Varianten teilen sich denselben Kern fuer Branch-Validierung, Versionierung, Publish, Artefakte und Retention.
 
-## Zweck
+## Verfuegbare Templates
 
-Die Vorlage standardisiert folgende Abläufe:
+- `jobs/NpmBuildAndVersionJobTmpl.yml`
+  - Wrapper fuer klassische npm-Projekte mit einem einzigen `package.json`-Kontext.
+  - Verwendet intern denselben Pfad fuer Installation, Paket-Metadaten und Publish.
+- `jobs/AngularLibraryBuildAndVersionJobTmpl.yml`
+  - Wrapper fuer Angular-Workspaces mit publizierbarer Library.
+  - Trennt Workspace, Library-`package.json` und Publish-Verzeichnis.
+- `jobs/templates/jobsPackageBuild.yml`
+  - Gemeinsamer Kern fuer beide Wrapper.
 
-- Checkout des Repositories inklusive Submodules
-- Prüfung auf `package.json` und `package-lock.json`
-- Prüfung, dass `package.json` keine `preversion`-, `version`- oder `postversion`-Skripte definiert
-- Prüfung auf einen Scoped Package Name in `package.json.name` im Format `@scope/name`
-- Prüfung, dass der verwendete Scope in der erlaubten Liste enthalten ist
-- Prüfung, dass `package.json.version` SemVer mit numerischem `major.minor.patch` verwendet
-- Ermittlung der Paketversion aus `package.json`
-- Validierung von Versions- und Branch-Regeln
-- Ausführung von `npm ci`
-- Ausführung konfigurierbarer Build-Kommandos
-- Optionales `npm publish` mit Scoped Registry-Konfiguration
-- Optionales Publizieren von Pipeline-Artefakten
-- Optionales Pushen eines Git-Release-Tags
-- Optionales Setzen von Pipeline-Retention
+## Gemeinsames Verhalten
 
-## Interne Struktur
+Die Templates standardisieren folgende Ablaufe:
 
-- `jobs/NpmBuildAndVersionJobTmpl.yml` ermittelt zuerst den Default-Branch aus Azure DevOps und orchestriert danach die drei Branch-Fälle `default`, `release` und `other`.
-- `jobs/templates/jobsNpmBuild.yml` kapselt die gemeinsame Job-Definition mit Pool, Timeout, Checkout, Prepare-Step, optionaler Branch-Validierung und Build-/Publish-Step.
-- `jobs/templates/stepsPrepare.yml`, `jobs/templates/stepsValidateDefaultBranch.yml`, `jobs/templates/stepsValidateReleaseBranch.yml` und `jobs/templates/stepsNpmBuildPublish.yml` enthalten die wiederverwendeten Schrittfolgen.
+1. Default-Branch aus Azure DevOps ermitteln
+2. Repository auschecken
+3. Pfade normalisieren und validieren
+4. `package.json` und `package-lock.json` pruefen
+5. Paketname, Scope und Version aus dem Paketkontext lesen
+6. Branch-spezifische Versionsregeln pruefen
+7. `npm ci` im Workspace ausfuehren
+8. Bei Pre-Releases optional `npm version --no-git-tag-version --ignore-scripts` ausfuehren
+9. Build-Kommandos ausfuehren
+10. Optional `npm publish` ausfuehren
+11. Optional Git-Tag pushen
+12. Optional Pipeline-Artefakte publizieren
+13. Optional Retention-Lease setzen
 
-## Branch-Verhalten
+## Pfadmodell
 
-Die Vorlage erzeugt einen Vorab-Job und drei Build-Jobs. Abhängig vom aktuellen Branch läuft nach der Default-Branch-Ermittlung genau einer der drei Build-Jobs:
+Der gemeinsame Kern arbeitet mit drei relativen Pfaden innerhalb des Repositories:
 
-| Job | Branch-Bedingung | Verhalten |
-| --- | --- | --- |
-| `resolve_default_branch` | immer | Liest den konfigurierten Default-Branch des aktuellen Azure-DevOps-Repositories |
-| `build_default_branch_job` | exakt der in Azure DevOps konfigurierte Default-Branch | Erlaubt nur Pre-Releases mit Label `snapshot`, publiziert in die Snapshot-Registry |
-| `build_release_branch_job` | `release/*`, sofern nicht zugleich Default-Branch | Erlaubt finale Versionen oder Pre-Releases mit Label `release`, publiziert in die Release-Registry, kann Git-Tag pushen |
-| `build_other_branch_job` | alle übrigen Branches | Baut das Projekt ohne npm-Publish und ohne Artefakt-Publish |
+- `workspacePath`
+  - Verzeichnis fuer `npm ci` und Build-Kommandos.
+- `packagePath`
+  - Verzeichnis mit dem massgeblichen `package.json` fuer Name, Scope und Version.
+- `publishPath`
+  - Verzeichnis, aus dem `npm publish` ausgefuehrt wird.
 
-## Versionslogik
+Alle Pfade muessen relativ zum Repository sein. Absolute Pfade sowie Segmente wie `..` sind unzulaessig.
 
-Während der Vorbereitung werden aus `package.json` mehrere Pipeline-Variablen ermittelt:
+## Npm-Wrapper
 
-| Variable | Bedeutung |
-| --- | --- |
-| `packageName` | Paketname aus `package.json`, muss im Format `@scope/name` vorliegen |
-| `packageScope` | Scope-Anteil aus `package.json.name`, z. B. `@acme` |
-| `releaseNumber` | vollständige Version aus `package.json` |
-| `majorMinor` | `major.minor`-Anteil der Version, z. B. `1.4` |
-| `isPreRelease` | `true`, wenn die Version einen Pre-Release-Teil enthält |
-| `versionLabel` | erster Pre-Release-Bezeichner, z. B. `snapshot` oder `release` |
+`jobs/NpmBuildAndVersionJobTmpl.yml` behaelt die bisherige API bei.
 
-Zusätzliche Regeln:
-
-- `package.json.name` muss als Scoped Package Name im Format `@scope/name` gesetzt sein.
-- Der Scope aus `package.json.name` muss einer der folgenden Werte sein: `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
-- `package.json.version` muss SemVer-konform sein; insbesondere muessen `major`, `minor` und `patch` numerisch sein.
-- Auf dem in Azure DevOps konfigurierten Default-Branch sind nur Pre-Releases erlaubt.
-- Auf dem in Azure DevOps konfigurierten Default-Branch muss das Pre-Release-Label `snapshot` sein.
-- Auf `release/*` ist entweder eine finale Version oder ein Pre-Release mit Label `release` erlaubt.
-- Auf `release/*` muss der Branchname mit `release/<major.minor>` beginnen, z. B. `release/1.4` oder `release/1.4.2`.
-
-## Ablauf der Build-Jobs
-
-1. Repository auschecken
-2. `package.json` und `package-lock.json` prüfen
-3. Prüfung, dass `package.json` keine `preversion`-, `version`- oder `postversion`-Skripte definiert
-4. Scoped Package Name aus `package.json.name` prüfen, erlaubten Scope validieren und Scope ableiten
-5. `package.json.version` als SemVer mit numerischem `major.minor.patch` prüfen
-6. Versionsinformationen und Release-Metadaten ermitteln
-7. Branch-spezifische Versionsregeln prüfen
-8. `npm ci` ausführen
-9. Bei Pre-Releases optional die Paketversion lokal mit `$(releaseNumber).$(branchRunCounter)` per `npm version --ignore-scripts` setzen
-10. Alle Einträge aus `npmBuildCmd` nacheinander ausführen
-11. Optional `npm publish` mit `--registry` und zusätzlicher Scoped-Registry-Zuordnung `--@scope:registry`
-12. Optional den konkreten Git-Release-Tag vom Remote synchronisieren, erzeugen und pushen
-13. Optional Pipeline-Artefakte veröffentlichen
-14. Optional Retention für den Pipeline-Lauf setzen
-
-## Parameter
+### Parameter
 
 | Parameter | Typ | Standardwert | Bedeutung |
 | --- | --- | --- | --- |
-| `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc`, die für `npm ci`, Build und Publish verwendet wird |
-| `projectPath` | `string` | `.` | Relativer Projektpfad innerhalb des Repositories; `.` steht fuer das Repo-Root, `./` am Anfang sowie `/` oder `/.` am Ende werden normalisiert, absolute Pfade sind unzulaessig |
-| `artifactPath` | `object` | `['target/']` | Liste von Verzeichnissen, die als Pipeline-Artefakte veröffentlicht werden können; der Artefaktname wird aus dem Pfad abgeleitet |
-| `npmBuildCmd` | `object` | `['run build']` | Liste von npm-Kommandos, die nach `npm ci` ausgeführt werden |
-| `publishBuildArtifacts` | `boolean` | `false` | Aktiviert das Publizieren der in `artifactPath` definierten Artefakte |
-| `retention` | `boolean` | `true` | Aktiviert eine Retention-Lease von 365 Tagen für Builds des Azure-DevOps-Default-Branches |
-| `releaseRetentionDays` | `number` | `36501` | Anzahl der Retention-Tage für `release/*`-Builds; Werte größer als `36500` werden in Azure DevOps als `forever` angezeigt |
-| `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry für `release/*`-Builds |
-| `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry für den in Azure DevOps konfigurierten Default-Branch |
-| `tagRelease` | `boolean` | `true` | Aktiviert auf Release-Branches das Erzeugen und Pushen eines annotierten Git-Tags |
-| `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool für alle Jobs |
-| `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Liste von Azure-DevOps-Demands, die unverändert an den Pool übergeben werden |
+| `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc` fuer `npm ci`, Build und Publish |
+| `projectPath` | `string` | `.` | Relativer Projektpfad; wird intern fuer `workspacePath`, `packagePath` und `publishPath` verwendet |
+| `artifactPath` | `object` | `['target/']` | Verzeichnisse fuer Pipeline-Artefakte, relativ zu `projectPath` |
+| `npmBuildCmd` | `object` | `['run build']` | Liste von `npm`-Teilkommandos, z. B. `run test` oder `run build` |
+| `publishBuildArtifacts` | `boolean` | `false` | Publiziert die in `artifactPath` konfigurierten Artefakte |
+| `retention` | `boolean` | `true` | Setzt auf dem Default-Branch eine Retention-Lease fuer 365 Tage |
+| `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
+| `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry fuer `release/*` |
+| `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry fuer den Default-Branch |
+| `tagRelease` | `boolean` | `true` | Pusht auf `release/*` ein Git-Tag |
+| `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool |
+| `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Azure-DevOps-Demands |
 | `timeoutInMinutes` | `number` | `30` | Maximale Laufzeit pro Job |
 
-## Voraussetzungen
-
-- Das Projekt enthält `package.json` und `package-lock.json`.
-- `package.json` definiert keine npm Lifecycle-Skripte `preversion`, `version` oder `postversion`, da das Template `npm version` mit `--ignore-scripts` ausführt.
-- `package.json.name` ist als Scoped Package Name im Format `@scope/name` gesetzt.
-- Der Scope aus `package.json.name` ist einer der erlaubten Werte `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
-- `package.json.version` ist SemVer-konform und verwendet numerisches `major.minor.patch`.
-- Auf dem Build-Agent sind `node`, `npm` und `git` verfügbar.
-- Das Pipeline-Skript kann per `System.AccessToken` auf die Azure-DevOps-REST-API des aktuellen Repositories zugreifen.
-- Die konfigurierte `.npmrc` erlaubt Paketinstallation und, falls aktiviert, Publish in die Ziel-Registry fuer den verwendeten Scope.
-- Für das Pushen von Git-Tags müssen ausreichende Schreibrechte auf das Repository vorhanden sein.
-- Für Release-Branches muss der Branchname mit `release/<major.minor>` beginnen.
-
-## Einbindungsbeispiel
+### Beispiel
 
 ```yaml
 jobs:
@@ -132,12 +89,125 @@ jobs:
       timeoutInMinutes: 45
 ```
 
+## Angular-Library-Wrapper
+
+`jobs/AngularLibraryBuildAndVersionJobTmpl.yml` ist fuer Angular-Workspaces gedacht, bei denen Installation, Library-Metadaten und Publish-Verzeichnis auseinanderfallen.
+
+Typischer Zuschnitt:
+
+- `workspacePath: .`
+- `packagePath: projects/my-lib`
+- `publishPath: dist/my-lib`
+
+### Parameter
+
+| Parameter | Typ | Standardwert | Bedeutung |
+| --- | --- | --- | --- |
+| `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc` fuer `npm ci`, Build und Publish |
+| `workspacePath` | `string` | `.` | Angular-Workspace fuer `npm ci` und Build-Kommandos |
+| `packagePath` | `string` | keiner | Pfad zur Library mit dem massgeblichen `package.json` |
+| `publishPath` | `string` | keiner | Pfad zum Build-Output, aus dem `npm publish` ausgefuehrt wird |
+| `buildCommands` | `object` | keiner | Shell-Kommandos, die im Workspace ausgefuehrt werden |
+| `artifactPath` | `object` | `['dist/']` | Zu publizierende Artefakte, relativ zu `workspacePath` |
+| `publishBuildArtifacts` | `boolean` | `false` | Publiziert die in `artifactPath` konfigurierten Artefakte |
+| `retention` | `boolean` | `true` | Setzt auf dem Default-Branch eine Retention-Lease fuer 365 Tage |
+| `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
+| `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry fuer `release/*` |
+| `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry fuer den Default-Branch |
+| `tagRelease` | `boolean` | `true` | Pusht auf `release/*` ein Git-Tag |
+| `gitTagTemplate` | `string` | `$(packageNameSlug)-$(releaseNumber)` | Tag-Namensschema fuer Release-Tags |
+| `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool |
+| `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Azure-DevOps-Demands |
+| `timeoutInMinutes` | `number` | `30` | Maximale Laufzeit pro Job |
+
+### Beispiel
+
+```yaml
+jobs:
+  - template: jobs/AngularLibraryBuildAndVersionJobTmpl.yml
+    parameters:
+      workspacePath: .
+      packagePath: projects/my-lib
+      publishPath: dist/my-lib
+      npmUserConfig: /home/agent/.npmrc
+      buildCommands:
+        - npx ng build my-lib --configuration production
+      artifactPath:
+        - dist/my-lib/
+      publishBuildArtifacts: true
+      tagRelease: true
+```
+
+### Angular-Pfadmapping
+
+Fuer Angular-Workspaces ist die Trennung der drei Pfade entscheidend:
+
+- `workspacePath`
+  - Ort fuer `npm ci` und Build-Kommandos
+  - typischerweise das Repository-Root oder der Angular-Workspace
+- `packagePath`
+  - Ort des Library-`package.json`
+  - typischerweise `projects/<library-name>`
+- `publishPath`
+  - Ort des von Angular erzeugten Publish-Pakets
+  - typischerweise `dist/<library-name>`
+
+Typische Struktur:
+
+```text
+repo/
+├── package.json
+├── package-lock.json
+├── angular.json
+├── projects/
+│   └── my-lib/
+│       ├── package.json
+│       └── ng-package.json
+└── dist/
+    └── my-lib/
+        └── package.json
+```
+
+Dazu passendes Mapping:
+
+```yaml
+workspacePath: .
+packagePath: projects/my-lib
+publishPath: dist/my-lib
+```
+
+Typische Build-Kommandos:
+
+```yaml
+buildCommands:
+  - npx ng build my-lib --configuration production
+```
+
+Wenn der Angular-Workspace nicht im Repository-Root liegt, verschieben sich die Pfade entsprechend, zum Beispiel:
+
+```yaml
+workspacePath: frontend
+packagePath: frontend/projects/my-lib
+publishPath: frontend/dist/my-lib
+buildCommands:
+  - npx ng build my-lib --configuration production
+```
+
+## Branch- und Versionsregeln
+
+Fuer beide Wrapper gelten dieselben Regeln:
+
+- `package.json.name` muss als Scoped Package Name im Format `@scope/name` vorliegen.
+- Erlaubte Scopes sind `bshweb`, `diamant`, `dida`, `idefx`, `kbn`, `shg`.
+- `package.json.version` muss gueltiges SemVer mit numerischem `major.minor.patch` sein.
+- Auf dem Azure-DevOps-Default-Branch sind nur Pre-Releases mit Label `snapshot` erlaubt.
+- Auf `release/*` sind finale Versionen oder Pre-Releases mit Label `release` erlaubt.
+- `release/*` muss mit `release/<major.minor>` beginnen.
+
 ## Hinweise
 
-- `build_other_branch_job` führt bewusst kein npm-Publish, kein Artefakt-Publish und keine Retention-Lease aus.
-- Das Git-Tag entspricht der finalen `version` aus der `package.json`.
-- Existiert das Tag bereits auf demselben Commit, wird kein weiterer Push ausgeführt.
-- Release-Builds erhalten standardmäßig eine Retention-Lease von `36501` Tagen. Azure DevOps zeigt solche Leases als `forever` an.
-- `projectPath` wird vor der Verwendung normalisiert. `frontend`, `./frontend`, `frontend/` und `frontend/.` verweisen auf dasselbe Projektverzeichnis. Absolute Pfade brechen den Build mit einem Fehler ab.
-- `poolRequirements` erwartet vollständige Azure-DevOps-Demand-Ausdrücke wie `NODE_VERSION -equals 24`.
-- Für `artifactPath` werden bei der Veröffentlichung die Pfadtrenner aus dem Namen entfernt, z. B. wird `dist/` zu `dist` und `build/output/` zu `build-output`.
+- Der npm-Wrapper verwendet fuer Git-Tags weiterhin standardmaessig nur `$(releaseNumber)`.
+- Der Angular-Wrapper verwendet standardmaessig `$(packageNameSlug)-$(releaseNumber)`, damit mehrere Libraries in einem Repository nicht dieselben Tags erzeugen.
+- `build_other_branch_job` fuehrt bewusst kein npm-Publish, kein Artefakt-Publish und keine Retention-Lease aus.
+- `artifactPath` ist relativ zu `workspacePath`.
+- `publishPath` muss nach dem Build ein Verzeichnis mit `package.json` enthalten.

@@ -1,6 +1,11 @@
 parameters:
   - name: npmBuildCmd
     type: object
+    default: []
+
+  - name: buildCommands
+    type: object
+    default: []
 
   - name: npmUserConfig
     type: string
@@ -31,39 +36,67 @@ parameters:
     type: boolean
     default: false
 
+  - name: gitTagTemplate
+    type: string
+    default: '$(releaseNumber)'
 
 steps:
-  - task: Npm@1
+  - task: Bash@3
     displayName: "npm ci"
+    env:
+      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
     inputs:
-      command: custom
-      customCommand: ci --userconfig=${{ parameters.npmUserConfig }}
-      workingDir: $(projectWorkingPath)
+      targetType: 'inline'
+      workingDirectory: $(workspaceWorkingPath)
+      script: |
+        set -euo pipefail
+        npm ci
 
-  - task: Npm@1
-    displayName: NPM set pre-release version
+  - task: Bash@3
+    displayName: "NPM set pre-release version"
     condition: and(succeeded(), eq(coalesce(variables['isPreRelease'], 'false'), 'true'))
+    env:
+      NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
     inputs:
-      command: custom
-      customCommand: version $(releaseNumber).$(branchRunCounter) --no-git-tag-version --ignore-scripts --userconfig=${{ parameters.npmUserConfig }}
-      workingDir: $(projectWorkingPath)
+      targetType: 'inline'
+      workingDirectory: $(packageWorkingPath)
+      script: |
+        set -euo pipefail
+        npm version "$(releaseNumber).$(branchRunCounter)" --no-git-tag-version --ignore-scripts
 
   - ${{ each buildCmd in parameters.npmBuildCmd }}:
-      - task: Npm@1
-        displayName: NPM Command '${{ buildCmd }}'
+      - task: Bash@3
+        displayName: "NPM Command '${{ buildCmd }}'"
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
         inputs:
-          command: custom
-          customCommand: ${{ buildCmd }} --userconfig=${{ parameters.npmUserConfig }}
-          workingDir: $(projectWorkingPath)
-          verbose: true
+          targetType: 'inline'
+          workingDirectory: $(workspaceWorkingPath)
+          script: |
+            set -euo pipefail
+            npm ${{ buildCmd }}
+
+  - ${{ each buildCmd in parameters.buildCommands }}:
+      - task: Bash@3
+        displayName: "Build-Kommando '${{ buildCmd }}'"
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
+        inputs:
+          targetType: 'inline'
+          workingDirectory: $(workspaceWorkingPath)
+          script: |
+            set -euo pipefail
+            ${{ buildCmd }}
 
   - ${{ if eq(parameters.publishNpm, true) }}:
       - task: Bash@3
         displayName: "NPM Publish"
         condition: succeeded()
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
         inputs:
           targetType: 'inline'
-          workingDirectory: $(projectWorkingPath)
+          workingDirectory: $(publishWorkingPath)
           verbose: true
           script: |
             set -euo pipefail
@@ -81,11 +114,20 @@ steps:
               exit 1
             fi
 
+            if [[ ! -d "$(publishWorkingPath)" ]]; then
+              echo "##vso[task.logissue type=error]publishPath '$(publishWorkingPath)' wurde nicht gefunden. Stelle sicher, dass der Build das Publish-Verzeichnis erzeugt."
+              exit 1
+            fi
+
+            if [[ ! -f package.json ]]; then
+              echo "##vso[task.logissue type=error]Im Publish-Verzeichnis '$(publishWorkingPath)' wurde keine package.json gefunden."
+              exit 1
+            fi
+
             npm publish \
               --tag="${{ parameters.publishTag }}" \
               --registry="${PUBLISH_REGISTRY}" \
-              "--${PACKAGE_SCOPE}:registry=${PUBLISH_REGISTRY}" \
-              --userconfig="${{ parameters.npmUserConfig }}"
+              "--${PACKAGE_SCOPE}:registry=${PUBLISH_REGISTRY}"
 
   - ${{ if and(eq(parameters.publishNpm, true), eq(parameters.tagRelease, true)) }}:
       - task: Bash@3
@@ -96,14 +138,19 @@ steps:
           BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
         inputs:
           targetType: 'inline'
-          workingDirectory: $(projectWorkingPath)
+          workingDirectory: $(workspaceWorkingPath)
           script: |
             set -euo pipefail
 
-            TAG_NAME="$(node -p "require('./package.json').version")"
+            TAG_NAME="${{ parameters.gitTagTemplate }}"
             CURRENT_COMMIT="$(git rev-parse HEAD)"
             TAG_USER="${BUILD_REQUESTEDFOR}"
             TAG_MAIL="${BUILD_REQUESTEDFOREMAIL}"
+
+            if [[ -z "${TAG_NAME}" ]]; then
+              echo "##vso[task.logissue type=error]gitTagTemplate hat einen leeren Tag-Namen ergeben."
+              exit 1
+            fi
 
             if [[ -z "${TAG_USER}" || -z "${TAG_MAIL}" ]]; then
               echo "##vso[task.logissue type=error]Build.RequestedFor oder Build.RequestedForEmail ist leer. Git-Tag kann nicht mit dem ausloesenden Benutzer erstellt werden."
@@ -143,7 +190,7 @@ steps:
             displayName: "Artefaktname für '${{ artifactPath }}' ableiten"
             inputs:
               targetType: 'inline'
-              workingDirectory: $(projectWorkingPath)
+              workingDirectory: $(workspaceWorkingPath)
               script: |
                 set -euo pipefail
                 ARTIFACT_PATH="${{ artifactPath }}"
@@ -159,7 +206,7 @@ steps:
           - task: PublishPipelineArtifact@1
             displayName: "Artefakt '${{ artifactPath }}' publizieren"
             inputs:
-              targetPath: $(projectWorkingPath)/${{ artifactPath }}
+              targetPath: $(workspaceWorkingPath)/${{ artifactPath }}
               artifactName: $(artifactName)
 
   - ${{ if ne(parameters.retentionDays, 0) }}:
@@ -174,7 +221,7 @@ steps:
           BUILD_BUILDID: $(Build.BuildId)
         inputs:
           targetType: 'inline'
-          workingDirectory: $(projectWorkingPath)
+          workingDirectory: $(workspaceWorkingPath)
           script: |
             set -euo pipefail
 

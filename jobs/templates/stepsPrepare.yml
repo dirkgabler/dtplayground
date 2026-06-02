@@ -1,7 +1,11 @@
 parameters:
-  - name: projectPath
+  - name: workspacePath
     type: string
-  - name: npmUserConfig
+
+  - name: packagePath
+    type: string
+
+  - name: publishPath
     type: string
 
 steps:
@@ -14,46 +18,117 @@ steps:
   - bash: |
       set -euo pipefail
 
-      RAW_PATH="${{ parameters.projectPath }}"
+      NORMALIZED_PATH=''
 
-      if [[ "${RAW_PATH}" == /* ]]; then
-        echo "##vso[task.logissue type=error]projectPath muss relativ zum Repository sein. Absolute Pfade wie '${RAW_PATH}' sind nicht erlaubt."
-        exit 1
-      fi
+      normalize_relative_path() {
+        local raw_path="$1"
+        local parameter_name="$2"
+        local cleaned_path="${raw_path//\\//}"
 
-      # projectPath bereinigen (führende/folgende Slashes und Punkte)
-      CLEAN_PATH=$(echo "${RAW_PATH}" | sed -E 's/^\.\/|\/$|\/\.$//g')
+        if [[ "${cleaned_path}" == /* ]]; then
+          echo "##vso[task.logissue type=error]${parameter_name} muss relativ zum Repository sein. Absolute Pfade wie '${raw_path}' sind nicht erlaubt."
+          exit 1
+        fi
 
-      if [[ -z "${CLEAN_PATH}" || "${CLEAN_PATH}" == "." ]]; then
-        PROJECT_WORKING_PATH="$(Build.SourcesDirectory)"
-        NORMALIZED_RELATIVE_PATH="."
+        while [[ "${cleaned_path}" == ./* ]]; do
+          cleaned_path="${cleaned_path#./}"
+        done
+
+        while [[ "${cleaned_path}" == *"/./"* ]]; do
+          cleaned_path="${cleaned_path//\/\.\//\/}"
+        done
+
+        cleaned_path="$(printf '%s' "${cleaned_path}" | sed -E 's#/+#/#g; s#/$##; s#/\.$##')"
+
+        if [[ -z "${cleaned_path}" || "${cleaned_path}" == "." ]]; then
+          NORMALIZED_PATH='.'
+          return 0
+        fi
+
+        IFS='/' read -r -a path_segments <<< "${cleaned_path}"
+        for path_segment in "${path_segments[@]}"; do
+          if [[ -z "${path_segment}" || "${path_segment}" == "." || "${path_segment}" == ".." ]]; then
+            echo "##vso[task.logissue type=error]${parameter_name} '${raw_path}' ist ungueltig. Pfadsegmente '.', '..' oder leere Segmente werden nicht unterstuetzt."
+            exit 1
+          fi
+        done
+
+        NORMALIZED_PATH="${cleaned_path}"
+      }
+
+      normalize_relative_path "${{ parameters.workspacePath }}" "workspacePath"
+      WORKSPACE_RELATIVE_PATH="${NORMALIZED_PATH}"
+
+      normalize_relative_path "${{ parameters.packagePath }}" "packagePath"
+      PACKAGE_RELATIVE_PATH="${NORMALIZED_PATH}"
+
+      normalize_relative_path "${{ parameters.publishPath }}" "publishPath"
+      PUBLISH_RELATIVE_PATH="${NORMALIZED_PATH}"
+
+      if [[ "${WORKSPACE_RELATIVE_PATH}" == "." ]]; then
+        WORKSPACE_WORKING_PATH="$(Build.SourcesDirectory)"
       else
-        PROJECT_WORKING_PATH="$(Build.SourcesDirectory)/${CLEAN_PATH}"
-        NORMALIZED_RELATIVE_PATH="${CLEAN_PATH}"
+        WORKSPACE_WORKING_PATH="$(Build.SourcesDirectory)/${WORKSPACE_RELATIVE_PATH}"
       fi
 
-      if [[ ! -d "${PROJECT_WORKING_PATH}" ]]; then
-        echo "##vso[task.logissue type=error]Projektverzeichnis '${PROJECT_WORKING_PATH}' wurde nicht gefunden."
+      if [[ "${PACKAGE_RELATIVE_PATH}" == "." ]]; then
+        PACKAGE_WORKING_PATH="$(Build.SourcesDirectory)"
+      else
+        PACKAGE_WORKING_PATH="$(Build.SourcesDirectory)/${PACKAGE_RELATIVE_PATH}"
+      fi
+
+      if [[ "${PUBLISH_RELATIVE_PATH}" == "." ]]; then
+        PUBLISH_WORKING_PATH="$(Build.SourcesDirectory)"
+      else
+        PUBLISH_WORKING_PATH="$(Build.SourcesDirectory)/${PUBLISH_RELATIVE_PATH}"
+      fi
+
+      if [[ ! -d "${WORKSPACE_WORKING_PATH}" ]]; then
+        echo "##vso[task.logissue type=error]workspacePath '${WORKSPACE_WORKING_PATH}' wurde nicht gefunden."
         exit 1
       fi
 
-      echo "Verwende projectPath '${NORMALIZED_RELATIVE_PATH}' (${PROJECT_WORKING_PATH})."
-      echo "##vso[task.setvariable variable=projectPathNormalized]${NORMALIZED_RELATIVE_PATH}"
-      echo "##vso[task.setvariable variable=projectWorkingPath]${PROJECT_WORKING_PATH}"
-    displayName: "Normalisiere projectPath"
+      if [[ ! -d "${PACKAGE_WORKING_PATH}" ]]; then
+        echo "##vso[task.logissue type=error]packagePath '${PACKAGE_WORKING_PATH}' wurde nicht gefunden."
+        exit 1
+      fi
+
+      echo "Verwende workspacePath '${WORKSPACE_RELATIVE_PATH}' (${WORKSPACE_WORKING_PATH})."
+      echo "Verwende packagePath '${PACKAGE_RELATIVE_PATH}' (${PACKAGE_WORKING_PATH})."
+      echo "Verwende publishPath '${PUBLISH_RELATIVE_PATH}' (${PUBLISH_WORKING_PATH})."
+      echo "##vso[task.setvariable variable=workspacePathNormalized]${WORKSPACE_RELATIVE_PATH}"
+      echo "##vso[task.setvariable variable=packagePathNormalized]${PACKAGE_RELATIVE_PATH}"
+      echo "##vso[task.setvariable variable=publishPathNormalized]${PUBLISH_RELATIVE_PATH}"
+      echo "##vso[task.setvariable variable=workspaceWorkingPath]${WORKSPACE_WORKING_PATH}"
+      echo "##vso[task.setvariable variable=packageWorkingPath]${PACKAGE_WORKING_PATH}"
+      echo "##vso[task.setvariable variable=publishWorkingPath]${PUBLISH_WORKING_PATH}"
+
+      # Legacy-Aliasse fuer bestehende Validierungs-Templates.
+      echo "##vso[task.setvariable variable=projectPathNormalized]${PACKAGE_RELATIVE_PATH}"
+      echo "##vso[task.setvariable variable=projectWorkingPath]${PACKAGE_WORKING_PATH}"
+    displayName: "Normalisiere Workspace-, Package- und Publish-Pfade"
 
   - bash: |
       set -euo pipefail
-      for f in package.json package-lock.json; do
-        if [ -f "$f" ]; then
-          echo "$f found -> continue"
-        else
-          echo "##vso[task.logissue type=error]$f erforderlich aber nicht gefunden"
-          exit 1
-        fi
-      done
-    displayName: "Prüfe package.json und package-lock.json"
-    workingDirectory: $(projectWorkingPath)
+      if [ -f package.json ]; then
+        echo "package.json found -> continue"
+      else
+        echo "##vso[task.logissue type=error]package.json erforderlich aber nicht gefunden"
+        exit 1
+      fi
+    displayName: "Prüfe package.json"
+    workingDirectory: $(packageWorkingPath)
+
+  - bash: |
+      set -euo pipefail
+      if [ -f package-lock.json ]; then
+        echo "package-lock.json found -> continue"
+      else
+        echo "##vso[task.logissue type=error]package-lock.json erforderlich aber nicht gefunden"
+        exit 1
+      fi
+    displayName: "Prüfe package-lock.json"
+    workingDirectory: $(workspaceWorkingPath)
 
   - bash: |
       set -euo pipefail
@@ -67,7 +142,7 @@ steps:
 
       if (blockedScripts.length > 0) {
         console.error(
-          `##vso[task.logissue type=error]package.json enthaelt nicht unterstuetzte npm Lifecycle-Skripte (${blockedScripts.join(', ')}). Das Template fuehrt 'npm version' mit deaktivierten Scripts aus. Konsumenten-Pipelines muessen die betroffene Logik gegebenenfalls in explizite Pipeline-Schritte oder npmBuildCmd migrieren.`
+          `##vso[task.logissue type=error]package.json enthaelt nicht unterstuetzte npm Lifecycle-Skripte (${blockedScripts.join(', ')}). Das Template fuehrt 'npm version' mit deaktivierten Scripts aus. Konsumenten-Pipelines muessen die betroffene Logik gegebenenfalls in explizite Pipeline-Schritte oder Build-Kommandos migrieren.`
         );
         process.exit(1);
       }
@@ -75,7 +150,7 @@ steps:
       console.log('Keine blockierten npm Lifecycle-Skripte fuer npm version gefunden.');
       NODE
     displayName: "Prüfe blockierte npm version-Skripte"
-    workingDirectory: $(projectWorkingPath)
+    workingDirectory: $(packageWorkingPath)
 
   - bash: |
       set -euo pipefail
@@ -102,12 +177,14 @@ steps:
       }
 
       const packageScope = `@${packageScopeName}`;
+      const packageNameSlug = packageName.replace(/^@/, '').replace(/[\/@]+/g, '-');
       console.log(`Verwende Paketnamen '${packageName}' mit Scope '${packageScope}'.`);
       console.log(`##vso[task.setvariable variable=packageName]${packageName}`);
+      console.log(`##vso[task.setvariable variable=packageNameSlug]${packageNameSlug}`);
       console.log(`##vso[task.setvariable variable=packageScope]${packageScope}`);
       NODE
     displayName: "Prüfe Scoped Package Name und erlaubte Scopes"
-    workingDirectory: $(projectWorkingPath)
+    workingDirectory: $(packageWorkingPath)
 
   - bash: |
       set -euo pipefail
@@ -129,7 +206,7 @@ steps:
       console.log(`Verwende gueltige SemVer-Version '${version}'.`);
       NODE
     displayName: "Prüfe SemVer-Version"
-    workingDirectory: $(projectWorkingPath)
+    workingDirectory: $(packageWorkingPath)
 
   - bash: |
       set -euo pipefail
@@ -137,8 +214,6 @@ steps:
       MAJOR_MINOR="$(echo "$VERSION" | sed -E 's/^([0-9]+)\.([0-9]+).*/\1.\2/')"
       echo "##vso[task.setvariable variable=majorMinor]$MAJOR_MINOR"
 
-      # Liest den optionalen Pre-Release-Teil direkt aus einer SemVer-Version wie
-      # 1.2.3-snapshot oder 1.2.3-release.1 und verwendet das erste Segment als Label.
       PRERELEASE_PART="$(node -e "const version = process.env.VERSION || ''; const match = version.match(/^[0-9]+\.[0-9]+\.[0-9]+-([^+]+)(?:\+.*)?$/); process.stdout.write(match ? match[1] : '');")"
       if [ -n "$PRERELEASE_PART" ]; then
         echo "##vso[task.setvariable variable=isPreRelease]true"
@@ -151,4 +226,4 @@ steps:
 
       echo "##vso[task.setvariable variable=releaseNumber]$VERSION"
     displayName: "Ermittle Versionsnummer und Version-Label"
-    workingDirectory: $(projectWorkingPath)
+    workingDirectory: $(packageWorkingPath)

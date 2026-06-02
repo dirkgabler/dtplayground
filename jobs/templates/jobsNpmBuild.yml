@@ -16,7 +16,13 @@ parameters:
     type: string
     default: ''
 
-  - name: projectPath
+  - name: workspacePath
+    type: string
+
+  - name: packagePath
+    type: string
+
+  - name: publishPath
     type: string
 
   - name: npmUserConfig
@@ -50,6 +56,10 @@ parameters:
     type: boolean
     default: false
 
+  - name: gitTagTemplate
+    type: string
+    default: '$(releaseNumber)'
+
   - name: agentPoolName
     type: string
 
@@ -60,60 +70,26 @@ parameters:
     type: number
 
 jobs:
-  - job: ${{ parameters.jobName }}
-    dependsOn: resolve_default_branch
-    displayName: ${{ parameters.displayName }}
-    ${{ if eq(parameters.branchType, 'default') }}:
-      condition: |
-        and(
-          succeeded(),
-          eq(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true')
-        )
-    ${{ if eq(parameters.branchType, 'release') }}:
-      condition: |
-        and(
-          succeeded(),
-          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          eq(variables['isReleaseBranch'], 'true')
-        )
-    ${{ if eq(parameters.branchType, 'other') }}:
-      condition: |
-        and(
-          succeeded(),
-          ne(dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'], 'true'),
-          ne(variables['isReleaseBranch'], 'true')
-        )
-    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
-    pool:
-      name: ${{ parameters.agentPoolName }}
-      demands:
-        - ${{ each poolRequirement in parameters.poolRequirements }}:
-            - ${{ poolRequirement }}
-    variables:
-      - template: ../../variables/ReleaseVariablesTmpl.yml
-      - name: branchRunCounter
-        value: $[ counter(variables['Build.SourceBranchName'], 1) ]
-      - name: defaultBranchRef
-        value: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.defaultBranchRef'] ]
-      - name: isDefaultBranch
-        value: $[ dependencies.resolve_default_branch.outputs['resolveDefaultBranch.isDefaultBranch'] ]
-    steps:
-      - template: stepsPrepare.yml
-        parameters:
-          projectPath: ${{ parameters.projectPath }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-
-      - ${{ if ne(parameters.validationTemplate, '') }}:
-          - template: ${{ parameters.validationTemplate }}
-
-      - template: stepsNpmBuildPublish.yml
-        parameters:
-          npmBuildCmd: ${{ parameters.npmBuildCmd }}
-          npmUserConfig: ${{ parameters.npmUserConfig }}
-          artifactPath: ${{ parameters.artifactPath }}
-          publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
-          retentionDays: ${{ parameters.retentionDays }}
-          publishRegistry: ${{ parameters.publishRegistry }}
-          publishTag: ${{ parameters.publishTag }}
-          publishNpm: ${{ parameters.publishNpm }}
-          tagRelease: ${{ parameters.tagRelease }}
+  - template: jobsPackageBuild.yml
+    parameters:
+      jobName: ${{ parameters.jobName }}
+      displayName: ${{ parameters.displayName }}
+      branchType: ${{ parameters.branchType }}
+      validationTemplate: ${{ parameters.validationTemplate }}
+      workspacePath: ${{ parameters.workspacePath }}
+      packagePath: ${{ parameters.packagePath }}
+      publishPath: ${{ parameters.publishPath }}
+      npmUserConfig: ${{ parameters.npmUserConfig }}
+      artifactPath: ${{ parameters.artifactPath }}
+      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      buildCommands: []
+      publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
+      retentionDays: ${{ parameters.retentionDays }}
+      publishRegistry: ${{ parameters.publishRegistry }}
+      publishTag: ${{ parameters.publishTag }}
+      publishNpm: ${{ parameters.publishNpm }}
+      tagRelease: ${{ parameters.tagRelease }}
+      gitTagTemplate: ${{ parameters.gitTagTemplate }}
+      agentPoolName: ${{ parameters.agentPoolName }}
+      poolRequirements: ${{ parameters.poolRequirements }}
+      timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
