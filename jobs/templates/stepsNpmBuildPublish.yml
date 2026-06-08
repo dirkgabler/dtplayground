@@ -1,8 +1,4 @@
 parameters:
-  - name: npmBuildCmd
-    type: object
-    default: []
-
   - name: buildCommands
     type: object
     default: []
@@ -63,18 +59,6 @@ steps:
       script: |
         set -euo pipefail
         npm version "$(releaseNumber).$(branchRunCounter)" --no-git-tag-version --ignore-scripts
-
-  - ${{ each buildCmd in parameters.npmBuildCmd }}:
-      - task: Bash@3
-        displayName: "NPM Command '${{ buildCmd }}'"
-        env:
-          NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
-        inputs:
-          targetType: 'inline'
-          workingDirectory: $(workspaceWorkingPath)
-          script: |
-            set -euo pipefail
-            npm ${{ buildCmd }}
 
   - ${{ each buildCmd in parameters.buildCommands }}:
       - task: Bash@3

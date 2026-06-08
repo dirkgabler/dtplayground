@@ -15,11 +15,11 @@ parameters:
     default:
       - 'target/'
 
-  # Liste der npm-Build-Kommandos, die nach npm ci ausgefuehrt werden.
-  - name: npmBuildCmd
+  # Shell-Kommandos, die nach npm ci ausgefuehrt werden.
+  - name: buildCommands
     type: object
     default:
-      - 'run build'
+      - 'npm run build'
 
   # Steuert, ob Build-Artefakte in der Pipeline publiziert werden.
   - name: publishBuildArtifacts
@@ -141,7 +141,7 @@ jobs:
       publishPath: ${{ parameters.projectPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       ${{ if eq(parameters.retention, true) }}:
         retentionDays: 365
@@ -167,7 +167,7 @@ jobs:
       publishPath: ${{ parameters.projectPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       retentionDays: ${{ parameters.releaseRetentionDays }}
       publishRegistry: ${{ parameters.releaseRegistryUrl }}
@@ -189,7 +189,7 @@ jobs:
       publishPath: ${{ parameters.projectPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: ${{ parameters.npmBuildCmd }}
+      buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: false
       retentionDays: 0
       publishRegistry: ''

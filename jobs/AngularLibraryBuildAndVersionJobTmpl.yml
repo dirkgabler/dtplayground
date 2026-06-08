@@ -152,7 +152,6 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: []
       buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       ${{ if eq(parameters.retention, true) }}:
@@ -179,7 +178,6 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: []
       buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       retentionDays: ${{ parameters.releaseRetentionDays }}
@@ -202,7 +200,6 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      npmBuildCmd: []
       buildCommands: ${{ parameters.buildCommands }}
       publishBuildArtifacts: false
       retentionDays: 0

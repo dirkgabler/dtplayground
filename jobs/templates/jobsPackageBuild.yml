@@ -31,10 +31,6 @@ parameters:
   - name: artifactPath
     type: object
 
-  - name: npmBuildCmd
-    type: object
-    default: []
-
   - name: buildCommands
     type: object
     default: []
@@ -124,7 +120,6 @@ jobs:
 
       - template: stepsNpmBuildPublish.yml
         parameters:
-          npmBuildCmd: ${{ parameters.npmBuildCmd }}
           buildCommands: ${{ parameters.buildCommands }}
           npmUserConfig: ${{ parameters.npmUserConfig }}
           artifactPath: ${{ parameters.artifactPath }}
