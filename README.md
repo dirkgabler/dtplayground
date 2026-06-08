@@ -55,7 +55,7 @@ Alle Pfade muessen relativ zum Repository sein. Absolute Pfade sowie Segmente wi
 | `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc` fuer `npm ci`, Build und Publish |
 | `projectPath` | `string` | `.` | Relativer Projektpfad; wird intern fuer `workspacePath`, `packagePath` und `publishPath` verwendet |
 | `artifactPath` | `object` | `['target/']` | Verzeichnisse fuer Pipeline-Artefakte, relativ zu `projectPath` |
-| `npmBuildCmd` | `object` | `['run build']` | Liste von `npm`-Teilkommandos, z. B. `run test` oder `run build` |
+| `buildCommands` | `object` | `['npm run build']` | Shell-Kommandos, die nach `npm ci` ausgefuehrt werden, z. B. `npm run lint` oder `npm test` |
 | `publishBuildArtifacts` | `boolean` | `false` | Publiziert die in `artifactPath` konfigurierten Artefakte |
 | `retention` | `boolean` | `true` | Setzt auf dem Default-Branch eine Retention-Lease fuer 365 Tage |
 | `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
@@ -74,10 +74,10 @@ jobs:
     parameters:
       projectPath: frontend
       npmUserConfig: /home/agent/.npmrc
-      npmBuildCmd:
-        - run lint
-        - run test
-        - run build
+      buildCommands:
+        - npm run lint
+        - npm test
+        - npm run build
       artifactPath:
         - dist/
       publishBuildArtifacts: true
