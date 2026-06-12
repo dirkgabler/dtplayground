@@ -14,6 +14,12 @@ pr:
     include:
       - '*'
 
+parameters:
+  - name: sonarQubeServiceConnection
+    displayName: "SonarQube Service Connection (konfiguriert im Azure DevOps Projekt)"
+    type: string
+    default: 'SonarQubeEnterprise_PROD'
+
 stages:
   - stage: MAVEN_SonarQube
     displayName: Maven SonarQube
@@ -21,7 +27,7 @@ stages:
       - template: jobs/templates/jobsMavenSonarQube.yml@templates
         parameters:
           pomPath: '.'
-          sonarQubeServiceConnection: 'SonarQubeEnterprise_PROD'
+          sonarQubeServiceConnection: ${{ parameters.sonarQubeServiceConnection }}
           variableGroups:
             - pipelines_sccm_rsc
             - variables_sccm
