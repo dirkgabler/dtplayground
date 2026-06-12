@@ -1,5 +1,5 @@
 parameters:
-  - name: buildCommands
+  - name: npmBuildCommands
     type: object
     default: []
 
@@ -60,9 +60,9 @@ steps:
         set -euo pipefail
         npm version "$(releaseNumber).$(branchRunCounter)" --no-git-tag-version --ignore-scripts
 
-  - ${{ each buildCmd in parameters.buildCommands }}:
+  - ${{ each npmBuildCommand in parameters.npmBuildCommands }}:
       - task: Bash@3
-        displayName: "Build-Kommando '${{ buildCmd }}'"
+        displayName: "npm ${{ npmBuildCommand }}"
         env:
           NPM_CONFIG_USERCONFIG: ${{ parameters.npmUserConfig }}
         inputs:
@@ -70,7 +70,7 @@ steps:
           workingDirectory: $(workspaceWorkingPath)
           script: |
             set -euo pipefail
-            ${{ buildCmd }}
+            npm ${{ npmBuildCommand }}
 
   - ${{ if eq(parameters.publishNpm, true) }}:
       - task: Bash@3

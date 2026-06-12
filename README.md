@@ -25,7 +25,7 @@ Die Templates standardisieren folgende Ablaufe:
 6. Branch-spezifische Versionsregeln pruefen
 7. `npm ci` im Workspace ausfuehren
 8. Bei Pre-Releases optional `npm version --no-git-tag-version --ignore-scripts` ausfuehren
-9. Build-Kommandos ausfuehren
+9. npm-Build-Kommandos ausfuehren
 10. Optional `npm publish` ausfuehren
 11. Optional Git-Tag pushen
 12. Optional Pipeline-Artefakte publizieren
@@ -46,7 +46,7 @@ Alle Pfade muessen relativ zum Repository sein. Absolute Pfade sowie Segmente wi
 
 ## Npm-Wrapper
 
-`jobs/NpmBuildAndVersionJobTmpl.yml` behaelt die bisherige API bei.
+`jobs/NpmBuildAndVersionJobTmpl.yml` fuehrt Build-Schritte als npm-Kommandos aus.
 
 ### Parameter
 
@@ -55,7 +55,7 @@ Alle Pfade muessen relativ zum Repository sein. Absolute Pfade sowie Segmente wi
 | `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc` fuer `npm ci`, Build und Publish |
 | `projectPath` | `string` | `.` | Relativer Projektpfad; wird intern fuer `workspacePath`, `packagePath` und `publishPath` verwendet |
 | `artifactPath` | `object` | `['target/']` | Verzeichnisse fuer Pipeline-Artefakte, relativ zu `projectPath` |
-| `buildCommands` | `object` | `['npm run build']` | Shell-Kommandos, die nach `npm ci` ausgefuehrt werden, z. B. `npm run lint` oder `npm test` |
+| `npmBuildCommands` | `object` | `['run build']` | npm-Argumente, die nach `npm ci` ausgefuehrt werden, z. B. `run lint` oder `test` |
 | `publishBuildArtifacts` | `boolean` | `false` | Publiziert die in `artifactPath` konfigurierten Artefakte |
 | `retention` | `boolean` | `true` | Setzt auf dem Default-Branch eine Retention-Lease fuer 365 Tage |
 | `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
@@ -74,10 +74,10 @@ jobs:
     parameters:
       projectPath: frontend
       npmUserConfig: /home/agent/.npmrc
-      buildCommands:
-        - npm run lint
-        - npm test
-        - npm run build
+      npmBuildCommands:
+        - run lint
+        - test
+        - run build
       artifactPath:
         - dist/
       publishBuildArtifacts: true
@@ -104,10 +104,10 @@ Typischer Zuschnitt:
 | Parameter | Typ | Standardwert | Bedeutung |
 | --- | --- | --- | --- |
 | `npmUserConfig` | `string` | `/home/kwazdo/.npmrc` | Pfad zur `.npmrc` fuer `npm ci`, Build und Publish |
-| `workspacePath` | `string` | `.` | Angular-Workspace fuer `npm ci` und Build-Kommandos |
+| `workspacePath` | `string` | `.` | Angular-Workspace fuer `npm ci` und npm-Build-Kommandos |
 | `packagePath` | `string` | keiner | Pfad zur Library mit dem massgeblichen `package.json` |
 | `publishPath` | `string` | keiner | Pfad zum Build-Output, aus dem `npm publish` ausgefuehrt wird |
-| `buildCommands` | `object` | keiner | Shell-Kommandos, die im Workspace ausgefuehrt werden |
+| `npmBuildCommands` | `object` | keiner | npm-Argumente, die im Workspace ausgefuehrt werden |
 | `artifactPath` | `object` | `['dist/']` | Zu publizierende Artefakte, relativ zu `workspacePath` |
 | `publishBuildArtifacts` | `boolean` | `false` | Publiziert die in `artifactPath` konfigurierten Artefakte |
 | `retention` | `boolean` | `true` | Setzt auf dem Default-Branch eine Retention-Lease fuer 365 Tage |
@@ -130,8 +130,8 @@ jobs:
       packagePath: projects/my-lib
       publishPath: dist/my-lib
       npmUserConfig: /home/agent/.npmrc
-      buildCommands:
-        - npx ng build my-lib --configuration production
+      npmBuildCommands:
+        - run build:my-lib
       artifactPath:
         - dist/my-lib/
       publishBuildArtifacts: true
@@ -143,7 +143,7 @@ jobs:
 Fuer Angular-Workspaces ist die Trennung der drei Pfade entscheidend:
 
 - `workspacePath`
-  - Ort fuer `npm ci` und Build-Kommandos
+  - Ort fuer `npm ci` und npm-Build-Kommandos
   - typischerweise das Repository-Root oder der Angular-Workspace
 - `packagePath`
   - Ort des Library-`package.json`
@@ -176,12 +176,14 @@ packagePath: projects/my-lib
 publishPath: dist/my-lib
 ```
 
-Typische Build-Kommandos:
+Typische npm-Build-Kommandos:
 
 ```yaml
-buildCommands:
-  - npx ng build my-lib --configuration production
+npmBuildCommands:
+  - run build:my-lib
 ```
+
+Das zugehoerige projektspezifische Kommando liegt im `scripts`-Abschnitt der `package.json`, zum Beispiel `"build:my-lib": "ng build my-lib --configuration production"`.
 
 Wenn der Angular-Workspace nicht im Repository-Root liegt, verschieben sich die Pfade entsprechend, zum Beispiel:
 
@@ -189,8 +191,8 @@ Wenn der Angular-Workspace nicht im Repository-Root liegt, verschieben sich die 
 workspacePath: frontend
 packagePath: frontend/projects/my-lib
 publishPath: frontend/dist/my-lib
-buildCommands:
-  - npx ng build my-lib --configuration production
+npmBuildCommands:
+  - run build:my-lib
 ```
 
 ## Branch- und Versionsregeln

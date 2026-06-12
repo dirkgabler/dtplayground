@@ -31,7 +31,7 @@ parameters:
   - name: artifactPath
     type: object
 
-  - name: buildCommands
+  - name: npmBuildCommands
     type: object
 
   - name: publishBuildArtifacts
@@ -81,7 +81,7 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      buildCommands: ${{ parameters.buildCommands }}
+      npmBuildCommands: ${{ parameters.npmBuildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       retentionDays: ${{ parameters.retentionDays }}
       publishRegistry: ${{ parameters.publishRegistry }}

@@ -17,8 +17,8 @@ parameters:
   - name: publishPath
     type: string
 
-  # Shell-Kommandos, die im Workspace zum Bauen der Library ausgefuehrt werden.
-  - name: buildCommands
+  # npm-Argumente, die im Workspace zum Bauen der Library ausgefuehrt werden.
+  - name: npmBuildCommands
     type: object
 
   # Verzeichnisse, die optional als Pipeline-Artefakte veroeffentlicht werden.
@@ -152,7 +152,7 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      buildCommands: ${{ parameters.buildCommands }}
+      npmBuildCommands: ${{ parameters.npmBuildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       ${{ if eq(parameters.retention, true) }}:
         retentionDays: 365
@@ -178,7 +178,7 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      buildCommands: ${{ parameters.buildCommands }}
+      npmBuildCommands: ${{ parameters.npmBuildCommands }}
       publishBuildArtifacts: ${{ parameters.publishBuildArtifacts }}
       retentionDays: ${{ parameters.releaseRetentionDays }}
       publishRegistry: ${{ parameters.releaseRegistryUrl }}
@@ -200,7 +200,7 @@ jobs:
       publishPath: ${{ parameters.publishPath }}
       npmUserConfig: ${{ parameters.npmUserConfig }}
       artifactPath: ${{ parameters.artifactPath }}
-      buildCommands: ${{ parameters.buildCommands }}
+      npmBuildCommands: ${{ parameters.npmBuildCommands }}
       publishBuildArtifacts: false
       retentionDays: 0
       publishRegistry: ''
