@@ -1,0 +1,36 @@
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: DevOps/pipeline-templates
+      ref: refs/heads/main
+
+name: SonarQube-PR-Decoration-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - '*'
+
+stages:
+  - stage: MAVEN_SonarQube
+    displayName: Maven SonarQube
+    jobs:
+      - template: jobs/templates/jobsMavenSonarQube.yml@templates
+        parameters:
+          pomPath: '.'
+          sonarQubeServiceConnection: 'SonarQubeEnterprise_PROD'
+          variableGroups:
+            - pipelines_sccm_rsc
+            - variables_sccm
+          sonarExtraProperties: |
+            sonar.projectKey=$(Build.Repository.Name)
+            sonar.sources=src/main
+            sonar.tests=src/test
+          preSteps:
+            - bash: |
+                java -version
+                mvn -version
+              displayName: Tool-Versionen anzeigen

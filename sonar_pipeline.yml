@@ -9,80 +9,106 @@ pr:
 
 parameters:
   - name: sonarQubeBuildGoals
-    displayName: "Maven Goals zur Ausführung von Sonarqube"
+    displayName: "Maven Goals zur Ausfuehrung von SonarQube"
     type: string
     default: 'verify org.sonarsource.scanner.maven:sonar-maven-plugin:__SONAR_PLUGIN_VERSION__:sonar'
+
   - name: sonarQubeServiceConnection
-    displayName: "Sonarqube Service Connection (konfiguriert im Azure DevOps Projekt)"
+    displayName: "SonarQube Service Connection (konfiguriert im Azure DevOps Projekt)"
     type: string
     default: 'SonarQubeEnterprise_PROD'
+
   - name: pomPath
     displayName: "Relativer Pfad der pom.xml zum Repository-Root"
     type: string
-    default: '/'
+    default: '.'
 
-pool:
-  name: 'Self-hosted Linux (SEU)'
+  - name: variableGroups
+    displayName: "Variable Groups mit SonarQube Token und optionaler Plugin-Version"
+    type: object
+    default:
+      - pipelines_sccm_rsc
+      - variables_sccm
 
-variables:
-  - group: pipelines_sccm_rsc
-  - group: variables_sccm
+  - name: agentPoolName
+    displayName: "Agent Pool"
+    type: string
+    default: 'Self-hosted Linux (SEU)'
+
+  - name: poolRequirements
+    displayName: "Agent Demands"
+    type: object
+    default: []
+
   - name: sonarPluginVersionFallback
-    value: '5.5.0.6356'
-  - name: resolvedSonarPluginVersion
-    value: $[ coalesce(variables['SONAR_PLUGIN_VERSION'], variables['sonarPluginVersionFallback']) ]
+    displayName: "Fallback-Version des Sonar Maven Plugins"
+    type: string
+    default: '5.5.0.6356'
+
+  - name: sonarProjectName
+    displayName: "SonarQube Projektname"
+    type: string
+    default: '$(Build.Repository.Name)'
+
+  - name: sonarExtraProperties
+    displayName: "Zusaetzliche SonarQube Properties"
+    type: string
+    default: ''
+
+  - name: mavenOptions
+    displayName: "Maven JVM Optionen"
+    type: string
+    default: '-Xmx1024m'
+
+  - name: mavenTaskOptions
+    displayName: "Maven Task Optionen"
+    type: string
+    default: '-Dsonar.login=$(sonarq.Prod.Token)'
+
+  - name: sonarScannerOpts
+    displayName: "Sonar Scanner Optionen"
+    type: string
+    default: '-Dsonar.verbose=true -Dsonar.log.level=DEBUG'
+
+  - name: nodeExtraCaCerts
+    displayName: "Pfad zur zusaetzlichen CA-Zertifikatsdatei"
+    type: string
+    default: '/jenkins_trans/tool/cert/rootca1.pem'
+
+  - name: publishQualityGate
+    displayName: "SonarQube Quality Gate veroeffentlichen"
+    type: boolean
+    default: true
+
+  - name: pollingTimeoutSec
+    displayName: "Timeout fuer Quality-Gate-Polling in Sekunden"
+    type: string
+    default: '600'
+
+  - name: timeoutInMinutes
+    displayName: "Maximale Job-Laufzeit in Minuten"
+    type: number
+    default: 60
 
 stages:
   - stage: MAVEN_SonarQube
+    displayName: Maven SonarQube
     jobs:
-      - job: MAVEN_SonarQube
-        variables:
-          SONAR_SCANNER_OPTS: -Dsonar.verbose=true -Dsonar.log.level=DEBUG
-          NODE_EXTRA_CA_CERTS: /jenkins_trans/tool/cert/rootca1.pem
-
-        steps:
-          - bash: |
-              PARAM_GOALS="$PARAM_GOALS_RAW"
-              GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
-              RESOLVED_PLUGIN_VERSION="$RESOLVED_PLUGIN_VERSION_RAW"
-              
-              if [ -z "$RESOLVED_PLUGIN_VERSION" ]; then
-                echo "Es konnte keine Sonar-Plugin-Version aufgeloest werden."
-                exit 1
-              fi
-
-              echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION"
-
-              if echo "$PARAM_GOALS" | grep -Fq "sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"; then
-                echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
-                RESOLVED_GOALS="${PARAM_GOALS//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION}"
-              else
-                echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS"
-                RESOLVED_GOALS="$PARAM_GOALS"
-              fi
-              
-              echo "Aufgeloeste Maven Goals: $RESOLVED_GOALS"
-              echo "##vso[task.setvariable variable=resolvedSonarGoals]$RESOLVED_GOALS"
-            displayName: 'Dynamische Ermittlung der SonarQube Goals'
-            env:
-              PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
-              RESOLVED_PLUGIN_VERSION_RAW: $(resolvedSonarPluginVersion)
-
-          - task: SonarQubePrepare@7
-            inputs:
-              SonarQube: ${{ parameters.sonarQubeServiceConnection }}
-              scannerMode: 'Other'
-              extraProperties: |
-                sonar.projectName=$(Build.Repository.Name)
-
-          - task: Maven@4
-            displayName: SonarQubeRunAnalyze
-            inputs:
-              mavenPomFile: $(Build.Repository.LocalPath)${{ parameters.pomPath }}/pom.xml
-              options: -Dsonar.login=$(sonarq.Prod.Token)
-              mavenOptions: -Xmx1024m
-              goals: $(resolvedSonarGoals)
-
-          - task: SonarQubePublish@7
-            inputs:
-              pollingTimeoutSec: '600'
+      - template: jobs/templates/jobsMavenSonarQube.yml
+        parameters:
+          sonarQubeBuildGoals: ${{ parameters.sonarQubeBuildGoals }}
+          sonarQubeServiceConnection: ${{ parameters.sonarQubeServiceConnection }}
+          pomPath: ${{ parameters.pomPath }}
+          variableGroups: ${{ parameters.variableGroups }}
+          agentPoolName: ${{ parameters.agentPoolName }}
+          poolRequirements: ${{ parameters.poolRequirements }}
+          sonarPluginVersionFallback: ${{ parameters.sonarPluginVersionFallback }}
+          sonarProjectName: ${{ parameters.sonarProjectName }}
+          sonarExtraProperties: ${{ parameters.sonarExtraProperties }}
+          mavenOptions: ${{ parameters.mavenOptions }}
+          mavenTaskOptions: ${{ parameters.mavenTaskOptions }}
+          sonarScannerOpts: ${{ parameters.sonarScannerOpts }}
+          nodeExtraCaCerts: ${{ parameters.nodeExtraCaCerts }}
+          publishQualityGate: ${{ parameters.publishQualityGate }}
+          pollingTimeoutSec: ${{ parameters.pollingTimeoutSec }}
+          timeoutInMinutes: ${{ parameters.timeoutInMinutes }}

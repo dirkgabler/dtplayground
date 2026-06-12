@@ -1,0 +1,250 @@
+parameters:
+  - name: jobName
+    type: string
+    default: MAVEN_SonarQube
+
+  - name: displayName
+    type: string
+    default: Maven SonarQube Analyse
+
+  - name: dependsOn
+    type: object
+    default: []
+
+  - name: condition
+    type: string
+    default: succeeded()
+
+  - name: agentPoolName
+    type: string
+    default: 'Self-hosted Linux (SEU)'
+
+  - name: poolRequirements
+    type: object
+    default: []
+
+  - name: variableGroups
+    type: object
+    default:
+      - pipelines_sccm_rsc
+      - variables_sccm
+
+  - name: sonarQubeBuildGoals
+    type: string
+    default: 'verify org.sonarsource.scanner.maven:sonar-maven-plugin:__SONAR_PLUGIN_VERSION__:sonar'
+
+  - name: sonarQubeServiceConnection
+    type: string
+    default: 'SonarQubeEnterprise_PROD'
+
+  - name: pomPath
+    type: string
+    default: '.'
+
+  - name: sonarPluginVersionFallback
+    type: string
+    default: '5.5.0.6356'
+
+  - name: sonarProjectName
+    type: string
+    default: '$(Build.Repository.Name)'
+
+  - name: sonarExtraProperties
+    type: string
+    default: ''
+
+  - name: mavenOptions
+    type: string
+    default: '-Xmx1024m'
+
+  - name: mavenTaskOptions
+    type: string
+    default: '-Dsonar.login=$(sonarq.Prod.Token)'
+
+  - name: sonarScannerOpts
+    type: string
+    default: '-Dsonar.verbose=true -Dsonar.log.level=DEBUG'
+
+  - name: nodeExtraCaCerts
+    type: string
+    default: '/jenkins_trans/tool/cert/rootca1.pem'
+
+  - name: checkoutSubmodules
+    type: boolean
+    default: false
+
+  - name: checkoutPersistCredentials
+    type: boolean
+    default: false
+
+  - name: checkoutClean
+    type: boolean
+    default: true
+
+  - name: publishQualityGate
+    type: boolean
+    default: true
+
+  - name: pollingTimeoutSec
+    type: string
+    default: '600'
+
+  - name: timeoutInMinutes
+    type: number
+    default: 60
+
+  - name: preSteps
+    type: stepList
+    default: []
+
+  - name: postSteps
+    type: stepList
+    default: []
+
+jobs:
+  - job: ${{ parameters.jobName }}
+    displayName: ${{ parameters.displayName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    condition: ${{ parameters.condition }}
+    timeoutInMinutes: ${{ parameters.timeoutInMinutes }}
+    pool:
+      name: ${{ parameters.agentPoolName }}
+      ${{ if ne(length(parameters.poolRequirements), 0) }}:
+        demands:
+          - ${{ each poolRequirement in parameters.poolRequirements }}:
+              - ${{ poolRequirement }}
+    variables:
+      - ${{ each variableGroup in parameters.variableGroups }}:
+          - group: ${{ variableGroup }}
+      - name: sonarPluginVersionFallback
+        value: ${{ parameters.sonarPluginVersionFallback }}
+      - name: resolvedSonarPluginVersion
+        value: $[ coalesce(variables['SONAR_PLUGIN_VERSION'], variables['sonarPluginVersionFallback']) ]
+      - name: SONAR_SCANNER_OPTS
+        value: ${{ parameters.sonarScannerOpts }}
+      - name: NODE_EXTRA_CA_CERTS
+        value: ${{ parameters.nodeExtraCaCerts }}
+    steps:
+      - checkout: self
+        submodules: ${{ parameters.checkoutSubmodules }}
+        persistCredentials: ${{ parameters.checkoutPersistCredentials }}
+        clean: ${{ parameters.checkoutClean }}
+        displayName: Repository auschecken
+
+      - ${{ parameters.preSteps }}
+
+      - bash: |
+          set -euo pipefail
+
+          NORMALIZED_PATH=''
+
+          normalize_relative_path() {
+            local raw_path="$1"
+            local cleaned_path="${raw_path//\\//}"
+
+            if [[ "${cleaned_path}" == "/" ]]; then
+              cleaned_path="."
+            fi
+
+            if [[ "${cleaned_path}" == /* ]]; then
+              echo "##vso[task.logissue type=error]pomPath muss relativ zum Repository sein. Absolute Pfade wie '${raw_path}' sind nicht erlaubt."
+              exit 1
+            fi
+
+            while [[ "${cleaned_path}" == ./* ]]; do
+              cleaned_path="${cleaned_path#./}"
+            done
+
+            while [[ "${cleaned_path}" == *"/./"* ]]; do
+              cleaned_path="${cleaned_path//\/\.\//\/}"
+            done
+
+            cleaned_path="$(printf '%s' "${cleaned_path}" | sed -E 's#/+#/#g; s#/$##; s#/\.$##')"
+
+            if [[ -z "${cleaned_path}" || "${cleaned_path}" == "." ]]; then
+              NORMALIZED_PATH='.'
+              return 0
+            fi
+
+            IFS='/' read -r -a path_segments <<< "${cleaned_path}"
+            for path_segment in "${path_segments[@]}"; do
+              if [[ -z "${path_segment}" || "${path_segment}" == "." || "${path_segment}" == ".." ]]; then
+                echo "##vso[task.logissue type=error]pomPath '${raw_path}' ist ungueltig. Pfadsegmente '.', '..' oder leere Segmente werden nicht unterstuetzt."
+                exit 1
+              fi
+            done
+
+            NORMALIZED_PATH="${cleaned_path}"
+          }
+
+          normalize_relative_path "${POM_PATH_RAW}"
+          POM_RELATIVE_PATH="${NORMALIZED_PATH}"
+
+          if [[ "${POM_RELATIVE_PATH}" == "." ]]; then
+            POM_FILE="$(Build.Repository.LocalPath)/pom.xml"
+          else
+            POM_FILE="$(Build.Repository.LocalPath)/${POM_RELATIVE_PATH}/pom.xml"
+          fi
+
+          if [[ ! -f "${POM_FILE}" ]]; then
+            echo "##vso[task.logissue type=error]pom.xml wurde unter '${POM_FILE}' nicht gefunden."
+            exit 1
+          fi
+
+          echo "Verwende pom.xml: ${POM_FILE}"
+          echo "##vso[task.setvariable variable=sonarPomFile]${POM_FILE}"
+        displayName: 'pomPath normalisieren'
+        env:
+          POM_PATH_RAW: ${{ parameters.pomPath }}
+
+      - bash: |
+          set -euo pipefail
+
+          PARAM_GOALS="$PARAM_GOALS_RAW"
+          GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
+          RESOLVED_PLUGIN_VERSION="$RESOLVED_PLUGIN_VERSION_RAW"
+
+          if [ -z "$RESOLVED_PLUGIN_VERSION" ]; then
+            echo "##vso[task.logissue type=error]Es konnte keine Sonar-Plugin-Version aufgeloest werden."
+            exit 1
+          fi
+
+          echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION"
+
+          if echo "$PARAM_GOALS" | grep -Fq "sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"; then
+            echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
+            RESOLVED_GOALS="${PARAM_GOALS//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION}"
+          else
+            echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS"
+            RESOLVED_GOALS="$PARAM_GOALS"
+          fi
+
+          echo "Aufgeloeste Maven Goals: $RESOLVED_GOALS"
+          echo "##vso[task.setvariable variable=resolvedSonarGoals]$RESOLVED_GOALS"
+        displayName: 'SonarQube Goals ermitteln'
+        env:
+          PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
+          RESOLVED_PLUGIN_VERSION_RAW: $(resolvedSonarPluginVersion)
+
+      - task: SonarQubePrepare@7
+        inputs:
+          SonarQube: ${{ parameters.sonarQubeServiceConnection }}
+          scannerMode: 'Other'
+          extraProperties: |
+            sonar.projectName=${{ parameters.sonarProjectName }}
+            ${{ parameters.sonarExtraProperties }}
+
+      - task: Maven@4
+        displayName: SonarQube Analyse ausfuehren
+        inputs:
+          mavenPomFile: $(sonarPomFile)
+          options: ${{ parameters.mavenTaskOptions }}
+          mavenOptions: ${{ parameters.mavenOptions }}
+          goals: $(resolvedSonarGoals)
+
+      - ${{ if eq(parameters.publishQualityGate, true) }}:
+          - task: SonarQubePublish@7
+            inputs:
+              pollingTimeoutSec: ${{ parameters.pollingTimeoutSec }}
+
+      - ${{ parameters.postSteps }}
