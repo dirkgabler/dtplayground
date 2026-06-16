@@ -59,7 +59,9 @@ parameters:
 
   - name: sonarScannerOpts
     type: string
-    default: '-Dsonar.verbose=true -Dsonar.log.level=DEBUG'
+    # Wird als Umgebungsvariable SONAR_SCANNER_OPTS gesetzt und vom SonarQube Scanner
+    # automatisch als JVM-Argumente ausgewertet. Ermöglicht z. B. verbose Logging.
+    default: '-Dsonar.verbose=true -Dsonar.log.level=INFO'
 
   - name: nodeExtraCaCerts
     type: string
@@ -134,33 +136,28 @@ jobs:
 
           normalize_relative_path() {
             local raw_path="$1"
-            local cleaned_path="${raw_path//\\//}"
 
-            if [[ "${cleaned_path}" == "/" ]]; then
-              cleaned_path="."
-            fi
+            # Backslashes zu Forward-Slashes konvertieren; "/" als "." behandeln
+            local path="${raw_path//\\//}"
+            [[ "${path}" == "/" ]] && path="."
 
-            if [[ "${cleaned_path}" == /* ]]; then
+            # Absolute Pfade ablehnen
+            if [[ "${path}" == /* ]]; then
               echo "##vso[task.logissue type=error]pomPath muss relativ zum Repository sein. Absolute Pfade wie '${raw_path}' sind nicht erlaubt."
               exit 1
             fi
 
-            while [[ "${cleaned_path}" == ./* ]]; do
-              cleaned_path="${cleaned_path#./}"
-            done
+            # Führende "./" und eingebettete "/./" entfernen
+            while [[ "${path}" == ./* ]]; do path="${path#./}"; done
+            while [[ "${path}" == *"/./"* ]]; do path="${path//\/\.\//\/}"; done
 
-            while [[ "${cleaned_path}" == *"/./"* ]]; do
-              cleaned_path="${cleaned_path//\/\.\//\/}"
-            done
+            # Doppelte und abschließende Slashes bereinigen
+            path="$(printf '%s' "${path}" | sed -E 's#/+#/#g; s#/$##; s#/\.$##')"
 
-            cleaned_path="$(printf '%s' "${cleaned_path}" | sed -E 's#/+#/#g; s#/$##; s#/\.$##')"
+            [[ -z "${path}" || "${path}" == "." ]] && { NORMALIZED_PATH='.'; return 0; }
 
-            if [[ -z "${cleaned_path}" || "${cleaned_path}" == "." ]]; then
-              NORMALIZED_PATH='.'
-              return 0
-            fi
-
-            IFS='/' read -r -a path_segments <<< "${cleaned_path}"
+            # Einzelne Pfadsegmente auf unzulässige Werte prüfen
+            IFS='/' read -r -a path_segments <<< "${path}"
             for path_segment in "${path_segments[@]}"; do
               if [[ -z "${path_segment}" || "${path_segment}" == "." || "${path_segment}" == ".." ]]; then
                 echo "##vso[task.logissue type=error]pomPath '${raw_path}' ist ungueltig. Pfadsegmente '.', '..' oder leere Segmente werden nicht unterstuetzt."
@@ -168,7 +165,7 @@ jobs:
               fi
             done
 
-            NORMALIZED_PATH="${cleaned_path}"
+            NORMALIZED_PATH="${path}"
           }
 
           normalize_relative_path "${POM_PATH_RAW}"
@@ -194,23 +191,23 @@ jobs:
       - bash: |
           set -euo pipefail
 
-          PARAM_GOALS="$PARAM_GOALS_RAW"
-          GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
-          RESOLVED_PLUGIN_VERSION="$RESOLVED_PLUGIN_VERSION_RAW"
+          readonly GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
 
-          if [ -z "$RESOLVED_PLUGIN_VERSION" ]; then
+          if [ -z "$RESOLVED_PLUGIN_VERSION_RAW" ]; then
             echo "##vso[task.logissue type=error]Die Variable SONAR_PLUGIN_VERSION ist nicht gesetzt. Pipeline wird abgebrochen."
             exit 1
           fi
 
-          echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION"
+          echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION_RAW"
 
-          if echo "$PARAM_GOALS" | grep -Fq "sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"; then
+          # Standard: Goals unveraendert uebernehmen
+          RESOLVED_GOALS="$PARAM_GOALS_RAW"
+
+          if [[ "$PARAM_GOALS_RAW" == *"sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"* ]]; then
             echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
-            RESOLVED_GOALS="${PARAM_GOALS//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION}"
+            RESOLVED_GOALS="${PARAM_GOALS_RAW//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION_RAW}"
           else
-            echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS"
-            RESOLVED_GOALS="$PARAM_GOALS"
+            echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS_RAW"
           fi
 
           echo "Aufgeloeste Maven Goals: $RESOLVED_GOALS"
