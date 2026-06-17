@@ -115,7 +115,7 @@ jobs:
       - ${{ each variableGroup in parameters.variableGroups }}:
           - group: ${{ variableGroup }}
       - name: resolvedSonarPluginVersion
-        value: $[ variables['SONAR_PLUGIN_VERSION'] ]
+        value: $[ variables['sonar.plugin.version'] ]
       - name: SONAR_SCANNER_OPTS
         value: ${{ parameters.sonarScannerOpts }}
       - name: NODE_EXTRA_CA_CERTS
