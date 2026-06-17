@@ -184,7 +184,7 @@ jobs:
 
           echo "Verwende pom.xml: ${POM_FILE}"
           echo "##vso[task.setvariable variable=sonarPomFile]${POM_FILE}"
-        displayName: 'pomPath normalisieren'
+        displayName: 'Eingaben validieren und normalisieren'
         env:
           POM_PATH_RAW: ${{ parameters.pomPath }}
 
