@@ -114,8 +114,6 @@ jobs:
     variables:
       - ${{ each variableGroup in parameters.variableGroups }}:
           - group: ${{ variableGroup }}
-      - name: resolvedSonarPluginVersion
-        value: $[ variables['sonar.plugin.version'] ]
       - name: SONAR_SCANNER_OPTS
         value: ${{ parameters.sonarScannerOpts }}
       - name: NODE_EXTRA_CA_CERTS
@@ -193,19 +191,19 @@ jobs:
 
           readonly GOALS_VERSION_PLACEHOLDER='__SONAR_PLUGIN_VERSION__'
 
-          if [ -z "$RESOLVED_PLUGIN_VERSION_RAW" ]; then
+          if [ -z "$SONAR_PLUGIN_VERSION" ]; then
             echo "##vso[task.logissue type=error]Die Variable SONAR_PLUGIN_VERSION ist nicht gesetzt. Pipeline wird abgebrochen."
             exit 1
           fi
 
-          echo "Verwende Sonar-Plugin-Version: $RESOLVED_PLUGIN_VERSION_RAW"
+          echo "Verwende Sonar-Plugin-Version: $SONAR_PLUGIN_VERSION"
 
           # Standard: Goals unveraendert uebernehmen
           RESOLVED_GOALS="$PARAM_GOALS_RAW"
 
           if [[ "$PARAM_GOALS_RAW" == *"sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"* ]]; then
             echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
-            RESOLVED_GOALS="${PARAM_GOALS_RAW//$GOALS_VERSION_PLACEHOLDER/$RESOLVED_PLUGIN_VERSION_RAW}"
+            RESOLVED_GOALS="${PARAM_GOALS_RAW//$GOALS_VERSION_PLACEHOLDER/$SONAR_PLUGIN_VERSION}"
           else
             echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS_RAW"
           fi
@@ -215,7 +213,7 @@ jobs:
         displayName: 'SonarQube Goals ermitteln'
         env:
           PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
-          RESOLVED_PLUGIN_VERSION_RAW: $(resolvedSonarPluginVersion)
+          SONAR_PLUGIN_VERSION: $(sonar.plugin.version)
 
       - task: SonarQubePrepare@7
         inputs:
