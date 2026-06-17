@@ -166,7 +166,7 @@ jobs:
             NORMALIZED_PATH="${path}"
           }
 
-          normalize_relative_path "${POM_PATH_RAW}"
+          normalize_relative_path "${POM_PATH}"
           POM_RELATIVE_PATH="${NORMALIZED_PATH}"
 
           if [[ "${POM_RELATIVE_PATH}" == "." ]]; then
@@ -184,7 +184,7 @@ jobs:
           echo "##vso[task.setvariable variable=sonarPomFile]${POM_FILE}"
         displayName: 'Eingaben validieren und normalisieren'
         env:
-          POM_PATH_RAW: ${{ parameters.pomPath }}
+          POM_PATH: ${{ parameters.pomPath }}
 
       - bash: |
           set -euo pipefail
