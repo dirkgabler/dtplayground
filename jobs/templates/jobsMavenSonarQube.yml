@@ -199,20 +199,20 @@ jobs:
           echo "Verwende Sonar-Plugin-Version: $SONAR_PLUGIN_VERSION"
 
           # Standard: Goals unveraendert uebernehmen
-          RESOLVED_GOALS="$PARAM_GOALS_RAW"
+          RESOLVED_GOALS="$BUILD_GOALS"
 
-          if [[ "$PARAM_GOALS_RAW" == *"sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"* ]]; then
+          if [[ "$BUILD_GOALS" == *"sonar-maven-plugin:${GOALS_VERSION_PLACEHOLDER}:sonar"* ]]; then
             echo "Goals enthalten den SONAR_PLUGIN_VERSION-Platzhalter. Ersetze ihn durch die aufgeloeste Version..."
-            RESOLVED_GOALS="${PARAM_GOALS_RAW//$GOALS_VERSION_PLACEHOLDER/$SONAR_PLUGIN_VERSION}"
+            RESOLVED_GOALS="${BUILD_GOALS//$GOALS_VERSION_PLACEHOLDER/$SONAR_PLUGIN_VERSION}"
           else
-            echo "Benutzerdefinierte Goals erkannt: $PARAM_GOALS_RAW"
+            echo "Benutzerdefinierte Goals erkannt: $BUILD_GOALS"
           fi
 
           echo "Aufgeloeste Maven Goals: $RESOLVED_GOALS"
           echo "##vso[task.setvariable variable=resolvedSonarGoals]$RESOLVED_GOALS"
         displayName: 'SonarQube Goals ermitteln'
         env:
-          PARAM_GOALS_RAW: ${{ parameters.sonarQubeBuildGoals }}
+          BUILD_GOALS: ${{ parameters.sonarQubeBuildGoals }}
           SONAR_PLUGIN_VERSION: $(sonar.plugin.version)
 
       - task: SonarQubePrepare@7
