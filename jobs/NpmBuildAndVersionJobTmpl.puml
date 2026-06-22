@@ -1,0 +1,126 @@
+@startuml
+title Ablauf NpmBuildAndVersionJobTmpl Pipeline
+
+' Konfiguration und Style für eine moderne Optik
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F8FAFC
+skinparam ActivityBorderColor #334155
+skinparam ActivityFontColor #0F172A
+skinparam PartitionBackgroundColor #F1F5F9
+skinparam PartitionBorderColor #94A3B8
+skinparam NoteBackgroundColor #FFFBEB
+skinparam NoteBorderColor #D97706
+skinparam GroupBackgroundColor #FFFFFF
+skinparam GroupBorderColor #CBD5E1
+
+start
+
+partition "**Initialisierung & Setup**" {
+    :jobs/NpmBuildAndVersionJobTmpl.yml\nParameter einlesen;
+    
+    partition "**Job: resolve_default_branch**" #F8FAFC {
+        :Azure DevOps API aufrufen;
+        if (Default-Branch ermittelt?) then (ja)
+            :Setze Outputs:\n- defaultBranchRef\n- isDefaultBranch;
+        else (nein)
+            :Fehler & Abbruch;
+            stop
+        endif
+    }
+}
+
+' Verzweigung basierend auf Branch-Typ (entspricht den Job-Conditions in Azure DevOps)
+' Alle drei Zweige nutzen die gleichen Basis-Templates
+if (Branch-Typ?) then (Default Branch)
+    -[#blue,bold]->
+    partition "**Job: build_default_branch_job**" #EFF6FF {
+        partition "**Template-Reuse: jobsPackageBuild.yml**" #DBEAFE {
+            :Variablen laden (ReleaseVariablesTmpl.yml);
+            
+            partition "**Template: stepsPrepare.yml**" #BFDBFE {
+                :Checkout & Pfade setzen;
+                :package.json analysieren;
+            }
+
+            partition "**Template: stepsValidateDefaultBranch.yml**" #BFDBFE {
+                :Pre-Release Snapshot validieren;
+            }
+
+            partition "**Template: stepsNpmBuildPublish.yml**" #BFDBFE {
+                :npm ci;
+                :npm version (Snapshot);
+                :npm build commands;
+                :npm publish (Snapshot);
+                :Artefakte publizieren;
+                :Retention Lease (365 Tage);
+            }
+        }
+    }
+elseif (Branch-Typ?) then (Release Branch)
+    -[#green,bold]->
+    partition "**Job: build_release_branch_job**" #F0FDF4 {
+        partition "**Template-Reuse: jobsPackageBuild.yml**" #DCFCE7 {
+            :Variablen laden (ReleaseVariablesTmpl.yml);
+            
+            partition "**Template: stepsPrepare.yml**" #BBF7D0 {
+                :Checkout & Pfade setzen;
+                :package.json analysieren;
+            }
+
+            partition "**Template: stepsValidateReleaseBranch.yml**" #BBF7D0 {
+                :Release Version validieren;
+            }
+
+            partition "**Template: stepsNpmBuildPublish.yml**" #BBF7D0 {
+                :npm ci;
+                :npm build commands;
+                :npm publish (Release);
+                :Git Tag pushen (optional);
+                :Artefakte publizieren;
+                :Retention Lease (releaseRetentionDays);
+            }
+        }
+    }
+elseif (Branch-Typ?) then (Sonstiger Branch)
+    -[#orange,bold]->
+    partition "**Job: build_other_branch_job**" #FFF7ED {
+        partition "**Template-Reuse: jobsPackageBuild.yml**" #FFEDD5 {
+            :Variablen laden (ReleaseVariablesTmpl.yml);
+            
+            partition "**Template: stepsPrepare.yml**" #FED7AA {
+                :Checkout & Pfade setzen;
+                :package.json analysieren;
+            }
+
+            :Keine Validierung;
+
+            partition "**Template: stepsNpmBuildPublish.yml**" #FED7AA {
+                :npm ci;
+                :npm build commands;
+                note right
+                    Kein Publish, kein Tag,
+                    keine Artefakte, keine Retention
+                end note
+            }
+        }
+    }
+endif
+
+stop
+
+legend right
+    **Template-Wiederverwendung (Reuse)**
+    Die Pipeline nutzt eine hierarchische Template-Struktur:
+    
+    1. **jobsPackageBuild.yml**: Zentraler Job-Container, der die Logik kapselt.
+       Wird 3x mit unterschiedlichen Parametern aufgerufen.
+    
+    2. **Gemeinsame Steps (in jedem Job)**:
+       - **stepsPrepare.yml**: Initialisierung der Arbeitsumgebung.
+       - **stepsNpmBuildPublish.yml**: Standardisierter Build- & Publish-Prozess.
+    
+    3. **Spezifische Steps**:
+       - **stepsValidate*.yml**: Validierung je nach Branch-Strategie.
+endlegend
+
+@enduml
