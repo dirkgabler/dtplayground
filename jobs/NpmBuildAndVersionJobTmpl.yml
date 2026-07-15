@@ -47,6 +47,11 @@ parameters:
     type: string
     default: "https://spu.sha.vrkw.de/nexus/repository/npm-releases/"
 
+  # Steuert, ob Default-Branch-Builds per npm publish nach Nexus publiziert werden.
+  - name: publishDefaultBranchBuild
+    type: boolean
+    default: true
+
   # Steuert, ob bei Release-Builds ein Git-Tag gepusht wird.
   - name: tagRelease
     type: boolean
@@ -149,7 +154,7 @@ jobs:
         retentionDays: 0
       publishRegistry: ${{ parameters.snapshotRegistryUrl }}
       publishTag: '$(versionLabel)'
-      publishNpm: true
+      publishNpm: ${{ parameters.publishDefaultBranchBuild }}
       tagRelease: false
       gitTagTemplate: '$(releaseNumber)'
       agentPoolName: ${{ parameters.agentPoolName }}
