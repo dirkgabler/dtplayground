@@ -61,7 +61,7 @@ Alle Pfade muessen relativ zum Repository sein. Absolute Pfade sowie Segmente wi
 | `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
 | `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry fuer `release/*` |
 | `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry fuer den Default-Branch |
-| `publishDefaultBranchBuild` | `boolean` | `true` | Publiziert Default-Branch-Builds per `npm publish` in die Snapshot-Registry |
+| `publishDefaultBranchBuild` | `boolean` | `true` | Publiziert Default-Branch-Builds per `npm publish` in die Snapshot-Registry; bei `false` entfallen die Prüfung und Auswertung von `package.json.version` |
 | `tagRelease` | `boolean` | `true` | Pusht auf `release/*` ein Git-Tag |
 | `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool |
 | `poolRequirements` | `object` | `['NODE_VERSION -equals 24']` | Azure-DevOps-Demands |
@@ -116,7 +116,7 @@ Typischer Zuschnitt:
 | `releaseRetentionDays` | `number` | `36501` | Retention fuer `release/*`-Builds |
 | `releaseRegistryUrl` | `string` | Nexus Release-Registry | Ziel-Registry fuer `release/*` |
 | `snapshotRegistryUrl` | `string` | Nexus Snapshot-Registry | Ziel-Registry fuer den Default-Branch |
-| `publishDefaultBranchBuild` | `boolean` | `true` | Publiziert Default-Branch-Builds per `npm publish` in die Snapshot-Registry |
+| `publishDefaultBranchBuild` | `boolean` | `true` | Publiziert Default-Branch-Builds per `npm publish` in die Snapshot-Registry; bei `false` entfallen die Prüfung und Auswertung von `package.json.version` |
 | `tagRelease` | `boolean` | `true` | Pusht auf `release/*` ein Git-Tag |
 | `gitTagTemplate` | `string` | `$(packageNameSlug)-$(releaseNumber)` | Tag-Namensschema fuer Release-Tags |
 | `agentPoolName` | `string` | `Self-hosted Linux (SEU)` | Agent-Pool |
@@ -214,7 +214,7 @@ Fuer beide Wrapper gelten dieselben Regeln:
 
 - Der npm-Wrapper verwendet fuer Git-Tags weiterhin standardmaessig nur `$(releaseNumber)`.
 - Der Angular-Wrapper verwendet standardmaessig `$(packageNameSlug)-$(releaseNumber)`, damit mehrere Libraries in einem Repository nicht dieselben Tags erzeugen.
-- `publishDefaultBranchBuild: false` verhindert nur den Nexus-Publish auf dem Default-Branch; Release-Branch-Publish wird weiterhin ueber die Release-Job-Konfiguration ausgefuehrt.
+- `publishDefaultBranchBuild: false` verhindert den Nexus-Publish auf dem Default-Branch und ueberspringt dort alle Versionspruefungen fuer `package.json.version`; Release-Branch-Publish wird weiterhin ueber die Release-Job-Konfiguration ausgefuehrt.
 - `build_other_branch_job` fuehrt bewusst kein npm-Publish, kein Artefakt-Publish und keine Retention-Lease aus.
 - `artifactPath` ist relativ zu `workspacePath`.
 - `publishPath` muss nach dem Build ein Verzeichnis mit `package.json` enthalten.

@@ -114,8 +114,9 @@ jobs:
           workspacePath: ${{ parameters.workspacePath }}
           packagePath: ${{ parameters.packagePath }}
           publishPath: ${{ parameters.publishPath }}
+          validatePackageVersion: ${{ parameters.publishNpm }}
 
-      - ${{ if ne(parameters.validationTemplate, '') }}:
+      - ${{ if and(eq(parameters.publishNpm, true), ne(parameters.validationTemplate, '')) }}:
           - template: ${{ parameters.validationTemplate }}
 
       - template: stepsNpmBuildPublish.yml
