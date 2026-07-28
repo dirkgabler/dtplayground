@@ -1,0 +1,139 @@
+parameters:
+- name: project_organization
+  type: string
+  default: SH-Gruppe
+  displayName: Organisation
+  values:
+  - SH-Gruppe
+  - SCCM-Admin-Spielplatz
+- name: project_name
+  type: string
+  default:
+  displayName: Projektname
+- name: force_push
+  type: boolean
+  default: false
+  displayName: Pipeline-YAML automatisch in Default-Branch übernehmen
+
+stages:
+- stage: createPipelineFile
+  displayName: 'SHG-Metadaten-Datei in allen Repositories des Projekts ${{ parameters.project_name }} anlegen'
+  pool: Self-hosted Windows
+  jobs:
+  - job: CREATE_PR_PIPELINE
+    displayName: 'SHG-Metadaten-Dateien anlegen'
+    timeoutInMinutes: 120
+    steps:
+    - powershell: |
+        Write-ADOPipelineLog "Init Organisation ..."
+        $org = Get-ADOOrganization -Alias "SHGruppe" -servicePrincipal "$(ADO_ROOT_SPN_NAME)" -secret "$(ADO_ROOT_ACCESS_TOKEN)"
+        $admin = $org.getProjektByName("Admin")
+        $paramTargetProject = $org.getProjektByName("${{parameters.project_name}}")
+        $targetProjectName = $paramTargetProject.getName()
+
+        # ACCESS CHECK, if user is member of Project Administrators
+        $accessAllowed = Test-ADOMemberOfGroup -organization $org -memberName $(Build.RequestedForEmail) -memberType HUMAN_USER -projectName $targetProjectName -groupType PROJECT_ADMINS
+        $accessAllowed = $accessAllowed -or (Test-ADOMemberOfGroup -organization $org -memberName $(Build.RequestedForEmail) -memberType HUMAN_USER -projectName $targetProjectName -groupType ORGANIZATION_SCCM_ADMINS)
+        Write-ADOPipelineLog "User $(Build.RequestedForEmail) - accessAllowed = $accessAllowed"
+        if ($accessAllowed -ne "true") {
+           Write-ADOPipelineLog "$(Build.RequestedForEmail) NOT ALLOWED to create SHG metadata files in project $targetProjectName, aborting" Error
+           exit 1
+        }
+
+        # Read and validate parameters
+        Write-ADOPipelineLog "Read and validate parameters"
+        $targetRepositories = @($paramTargetProject.getAllGitRespositories() | Sort-Object -Property { $_.getName() })
+        if ($targetRepositories.Count -eq 0) {
+           Write-ADOPipelineLog "No repositories found in project $targetProjectName" Error
+           exit 1
+        }
+        Write-ADOPipelineLog "Found $($targetRepositories.Count) repositories in project $targetProjectName"
+
+        # SOURCE variables of SHG metadata template
+        Write-ADOPipelineLog "Init source variables for SHG metadata template"
+        $templateRepositoryName = "SelfServicePipelineTemplates"
+        $templateFile = "SHG_metadata.json"
+        $templateFilesDir = "templates/json/"
+        $templateFilePath = $templateFilesDir + $templateFile
+        $templateRepository = $admin.getGitRespositoryByName($templateRepositoryName)
+
+        # Load template from source repository once before processing the repositories
+        Write-ADOPipelineLog "Loading $templateFilePath from $templateRepositoryName"
+        $srcItem = New-ADOGitItem -gitRepository $templateRepository -path $templateFilePath
+
+        $successfulRepositories = @()
+        $failedRepositories = @()
+        $repositoryIndex = 0
+
+        foreach ($paramTargetRepository in $targetRepositories) {
+           $repositoryIndex++
+           $targetRepositoryName = $paramTargetRepository.getName()
+           Write-ADOPipelineLog "Processing repository '$targetRepositoryName' ($repositoryIndex of $($targetRepositories.Count))"
+
+           try {
+              # TARGET variables of SHG metadata file
+              $targetBranchName = "feature/pr_decoration"
+              $targetFilePath = $templateFile
+
+              Write-ADOPipelineLog "Check if target branch '$targetBranchName' exists in repository '$targetRepositoryName'"
+              $targetBranch = $paramTargetRepository.getBranchByShortName($targetBranchName)
+              if ($null -eq $targetBranch) {
+                 Write-ADOPipelineLog "Target branch not there yet, creating it"
+                 $targetBranch = $paramTargetRepository.createBranchFromDefault($targetBranchName)
+              } else {
+                 throw "Target branch '$targetBranchName' already exists"
+              }
+
+              Write-ADOPipelineLog "Copy SHG metadata file to repository '$targetRepositoryName'"
+              Copy-ADOFile -organization $org -comment "Creating SHG metadata file" `
+                 -sourceProjectName "Admin" `
+                 -sourceRepositoryName "SelfServicePipelineTemplates" `
+                 -sourceBranchName "develop" `
+                 -sourcePath $templateFilePath `
+                 -targetRepositoryName $targetRepositoryName `
+                 -targetProjectname $targetProjectName `
+                 -targetBranchName $targetBranchName `
+                 -firstTargetPath $targetFilePath
+
+              if ("${{parameters.force_push}}" -eq "true") {
+                 Write-ADOPipelineLog "Create AND approve PULL REQUEST for repository '$targetRepositoryName'"
+                 New-ADOPullRequest -organisation $org `
+                    -projectName $targetProjectName `
+                    -repositoryName $targetRepositoryName `
+                    -sourceRefName $targetBranchName `
+                    -title "SHG-Metadaten-Datei anlegen" `
+                    -targetRefName $paramTargetRepository.getDefaultBranchShortName() `
+                    -description "Anlegen der SHG-Metadaten-Datei" `
+                    -persistent `
+                 | Complete-ADOPullRequest -mergeCommitMessage "SHG metadata file merged automatically" -deleteSourceBranch -bypassPolicies -justification "Self Service Action"
+              } else {
+                 Write-ADOPipelineLog "Create Pull Request for repository '$targetRepositoryName'"
+                 New-ADOPullRequest -organisation $org `
+                    -projectName $targetProjectName `
+                    -repositoryName $targetRepositoryName `
+                    -sourceRefName $targetBranchName `
+                    -title "SHG-Metadaten-Datei anlegen" `
+                    -targetRefName $paramTargetRepository.getDefaultBranchShortName() `
+                    -description "Anlegen der SHG-Metadaten-Datei" `
+                    -persistent
+              }
+
+              $successfulRepositories += $targetRepositoryName
+              Write-ADOPipelineLog "Repository '$targetRepositoryName' processed successfully"
+           }
+           catch {
+              $failedRepositories += $targetRepositoryName
+              Write-ADOPipelineLog "Repository '$targetRepositoryName' could not be processed: $($_.Exception.Message)" Error
+           }
+        }
+
+        Write-ADOPipelineLog "Processed $($targetRepositories.Count) repositories: $($successfulRepositories.Count) successful, $($failedRepositories.Count) failed"
+        if ($failedRepositories.Count -gt 0) {
+           Write-ADOPipelineLog "Failed repositories: $($failedRepositories -join ', ')" Error
+           exit 1
+        }
+
+        Write-ADOPipelineLog "### DONE ###"
+        exit 0
+      displayName: 'Create SHG metadata files in all repositories'
+      name: TEST_INIT
