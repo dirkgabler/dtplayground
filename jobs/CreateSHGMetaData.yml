@@ -16,11 +16,11 @@ parameters:
   displayName: Pipeline-YAML automatisch in Default-Branch übernehmen
 
 stages:
-- stage: createPipelineFile
+- stage: createSHGMetadata
   displayName: 'SHG-Metadaten-Datei in allen Repositories des Projekts ${{ parameters.project_name }} anlegen'
   pool: Self-hosted Windows
   jobs:
-  - job: CREATE_PR_PIPELINE
+  - job: CREATE_SHG_METADATA
     displayName: 'SHG-Metadaten-Dateien anlegen'
     timeoutInMinutes: 120
     steps:
@@ -42,12 +42,32 @@ stages:
 
         # Read and validate parameters
         Write-ADOPipelineLog "Read and validate parameters"
-        $targetRepositories = @($paramTargetProject.getAllGitRespositories() | Sort-Object -Property { $_.getName() })
-        if ($targetRepositories.Count -eq 0) {
+
+        # Temporary allowlist for test runs. Add the exact repository names here.
+        # An empty list aborts the run intentionally, so that a test run cannot
+        # accidentally process every repository in the project.
+        $testRepositoryNames = @(
+           "SimpleDemo"
+        )
+        if ($testRepositoryNames.Count -eq 0) {
+           Write-ADOPipelineLog "No test repositories configured. Add repository names to `$testRepositoryNames before starting the run." Error
+           exit 1
+        }
+
+        $allTargetRepositories = @($paramTargetProject.getAllGitRespositories() | Sort-Object -Property { $_.getName() })
+        if ($allTargetRepositories.Count -eq 0) {
            Write-ADOPipelineLog "No repositories found in project $targetProjectName" Error
            exit 1
         }
-        Write-ADOPipelineLog "Found $($targetRepositories.Count) repositories in project $targetProjectName"
+        $availableRepositoryNames = @($allTargetRepositories | ForEach-Object { $_.getName() })
+        $unknownRepositoryNames = @($testRepositoryNames | Where-Object { $_ -notin $availableRepositoryNames })
+        if ($unknownRepositoryNames.Count -gt 0) {
+           Write-ADOPipelineLog "Configured test repositories not found in project $targetProjectName: $($unknownRepositoryNames -join ', ')" Error
+           exit 1
+        }
+
+        $targetRepositories = @($allTargetRepositories | Where-Object { $_.getName() -in $testRepositoryNames })
+        Write-ADOPipelineLog "Processing $($targetRepositories.Count) configured test repositories in project $targetProjectName: $($testRepositoryNames -join ', ')"
 
         # SOURCE variables of SHG metadata template
         Write-ADOPipelineLog "Init source variables for SHG metadata template"
@@ -72,7 +92,7 @@ stages:
 
            try {
               # TARGET variables of SHG metadata file
-              $targetBranchName = "feature/pr_decoration"
+              $targetBranchName = "feature/shg_metadata"
               $targetFilePath = $templateFile
 
               Write-ADOPipelineLog "Check if target branch '$targetBranchName' exists in repository '$targetRepositoryName'"
@@ -136,4 +156,4 @@ stages:
         Write-ADOPipelineLog "### DONE ###"
         exit 0
       displayName: 'Create SHG metadata files in all repositories'
-      name: TEST_INIT
+      name: CREATE_SHG_METADATA_STEP
