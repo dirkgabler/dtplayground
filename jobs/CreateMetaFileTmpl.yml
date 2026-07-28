@@ -1,0 +1,205 @@
+parameters:
+  - name: project_organization
+    type: string
+    default: SH-Gruppe
+    displayName: Organisation
+    values:
+      - SH-Gruppe
+      - SCCM-Admin-Spielplatz
+  - name: project_name
+    type: string
+    default:
+    displayName: Projektname
+  - name: repo_name
+    type: string
+    displayName: Name des Repositories
+  - name: force_push
+    type: boolean
+    default: false
+    displayName: Pipeline-YAML automatisch in Default-Branch übernehmen
+
+stages:
+  - stage: createMetaFile
+    displayName: 'Meta-File in allen Projekten anlegen'
+    pool: Self-hosted Windows
+    jobs:
+      - job: CREATE_META_FILE
+        displayName: 'Meta-File anlegen'
+        timeoutInMinutes: 12000
+        steps:
+          - powershell: |
+              Write-ADOPipelineLog "Init Organisation ..."
+              $org = Get-ADOOrganization -Alias "SHGruppe" -servicePrincipal "$(ADO_ROOT_SPN_NAME)" -secret "$(ADO_ROOT_ACCESS_TOKEN)"
+              
+              # Konfigurierbare Liste der zu pruefenden Datei-Pattern.
+              # Je Pattern wird eine eigene Spalte in der CSV erzeugt (z.B. "*.java" -> "Hat_java").
+              $patterns = @(
+                 "pom.xml"
+                 "package.json"              
+                 "*.java"
+                 "*.ts"
+                 "*.tsx"
+                 "*.js"
+                 "*.jsx"              
+                 "*.vue"              
+                 "*.php"                            
+                 "*.py"                                          
+                 "*.c"
+                 "*.cpp"
+              )
+
+              # Nur fuer diese Projekte werden die Datei-Pattern (Extensions) in die Tiefe geprueft.
+              # Fuer alle anderen Projekte werden lediglich Repository-Name und URL ausgegeben;
+              # die Extension-Spalten bleiben leer.
+              $deepAnalysisProjects = @(
+                 "DWH_Tools"
+                 "DWH_Unittests"
+                 "DWH-Dokumentation"
+                 "DWH-Tabex"
+                 "EF_Archivierung"
+                 "EF_Bausparen"
+                 "EF_Framework"
+                 "EF_Interessent"
+                 "EF_Interne_Kontrolle"
+                 "EF_Internet_Homepage"
+                 "EF_Jahreskontoauszug_Vertragsfuehrung"
+                 "EF_Konto_und_Vertragsfuehrung"
+                 "EF_Partnerverwaltung"
+                 "EF_Produktbibliothek" 
+                 "EF_Randsystemschnittstellen"
+                 "EF_Saldierung"
+                 "EF_Versicherung"
+                 "EF_Zahlungsverkehr"
+                 "EF_Zentrale_Auskunft"
+                 "Elastic_Stack_Konfiguration"
+                 "Fachbereich"
+                 "Front_Office"
+                 "Fuchsgo-App-iOS"
+                 "FuchsNET"
+                 "Geld-vom-Staat"
+                 "Generatoren_im_SEP"
+                 "Gertrud_Digital"
+                 "Gesamtbanksteuerung"
+                 "Geschaeftsfeldrechnung"
+                 "Geschaeftslogik"
+                 "GitHub-Mirror"
+                 "Groupware"
+                 "Groupware-Adminskripte"
+                 "Groupware-Anwendungsverzeichnis"
+                 "Groupware-PowerApps"
+                 "Groupware-PowerApps-ALM-Test"
+                 "Hackathon"
+                 "HOST-Admins"
+                 "IAM"
+                 "Idefx"
+                 "IDP"
+                 "Infoportale"
+                 "iPhone_Export"
+              )
+
+              # Liste zum Sammeln der Ergebnisse initialisieren
+              $repoList = @()
+              
+              # Projekte alphabetisch (nach Name) durchlaufen
+              $projects = @($org.getAllProjects() | Sort-Object -Property { $_.getName() })
+              $projectCount = ($projects | Measure-Object).Count
+              $projectIndex = 0
+
+              foreach ($project in $projects) {
+                 $projectIndex++
+                 $projectName = $project.getName()
+                 Write-Host ""
+                 Write-Host "##vso[task.logissue type=warning]Projekt: $($project.getName()) ($projectIndex von $projectCount)"
+
+                 # Extensions nur bei konfigurierten Projekten in die Tiefe pruefen (einmal je Projekt).
+                 $analyzeProject = ($deepAnalysisProjects -contains $projectName)
+                 if (-not $analyzeProject) {
+                    Write-Host "  (Keine Tiefenanalyse: Projekt '$projectName' nicht konfiguriert)" -ForegroundColor Gray
+                 }
+
+                 # Alle Repositories des Projekts abrufen und alphabetisch (nach Name) sortieren
+                 $repos = @($project.getAllGitRespositories() | Sort-Object -Property { $_.getName() })
+              
+                 if ($repos -and $repos.Count -gt 0) {
+                    $repoCount = ($repos | Measure-Object).Count
+                    $repoIndex = 0
+                    foreach ($repo in $repos) {
+                       $repoIndex++
+                       Write-Host " - Repository: $($repo.getName()) ($repoIndex von $repoCount)"
+              
+                       # CSV-Zeile aufbauen (geordnet, damit die Spaltenreihenfolge stabil bleibt).
+                       # Repository-Name und URL werden immer ausgegeben.
+                       $repoInfo = [ordered]@{
+                          Projektname = $projectName
+                          "Repository-Name" = $repo.getName()
+                          "URL" = $repo.getWebUri()
+                       }
+
+                       # Je konfiguriertem Pattern pruefen, ob die Repository im Default-Branch
+                       # mindestens eine passende Datei enthaelt. Ohne -branchName verwendet
+                       # Find-ADOItem automatisch den Default-Branch.
+                       #
+                       # pom.xml und package.json werden immer geprueft. Fuer die uebrigen
+                       # (Quellcode-)Pattern gilt: sobald eines davon gefunden wurde, werden die
+                       # nachfolgenden nicht mehr geprueft und als $false eingetragen.
+                       $alwaysCheck = @("pom.xml", "package.json")
+                       $sourceHitFound = $false
+
+                       foreach ($pattern in $patterns) {
+                          # Spaltenname aus dem Pattern ableiten, z.B. "*.java" -> "Hat_java"
+                          $columnName = "Hat_" + ($pattern -replace '^\*\.', '')
+                          $isAlways = ($alwaysCheck -contains $pattern)
+                          $hasMatch = $false
+
+                          if (-not $analyzeProject) {
+                             # Projekt nicht zur Tiefenanalyse konfiguriert -> Spalte leer lassen
+                             $repoInfo[$columnName] = ""
+                             continue
+                          }
+
+                          if ((-not $isAlways) -and $sourceHitFound) {
+                             # Ein vorheriges Quellcode-Pattern hat bereits getroffen -> ueberspringen
+                          }
+                          else {
+                             try {
+                                $hits = Find-ADOItem -organization $org -findItemname $pattern `
+                                   -projectName $projectName -repositoryName $repo.getName() -itemType FILE
+                                $hasMatch = (($hits | Measure-Object).Count -gt 0)
+                             }
+                             catch {
+                                # z.B. leere Repository ohne Default-Branch -> als "kein Treffer" behandeln
+                                Write-Host "    (Pruefung '$pattern' uebersprungen: $($_.Exception.Message))" -ForegroundColor Gray
+                             }
+                             Write-Host "    Enthaelt ${pattern}: $hasMatch"
+
+                             # Treffer bei einem Quellcode-Pattern merken -> folgende ueberspringen
+                             if ($hasMatch -and (-not $isAlways)) {
+                                $sourceHitFound = $true
+                             }
+                          }
+
+                          $repoInfo[$columnName] = $hasMatch
+                       }
+              
+                       $repoList += [PSCustomObject]$repoInfo
+                    }
+                 } else {
+                    Write-Host "  (Keine Repositories gefunden)" -ForegroundColor Gray
+                 }
+              }
+              
+              # Export als CSV
+              # Wir nutzen UTF8 und das Semikolon als Trenner (Standard für deutsche Excel-Versionen)
+              $csvPath = "$(Build.ArtifactStagingDirectory)/Repositories.csv"
+              $repoList | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+              
+              Write-Host "Erfolgreich exportiert nach: $csvPath" -ForegroundColor Green
+              Write-Host
+            displayName: 'Show All Repositories'
+            name: TEST_INIT
+          - task: PublishBuildArtifacts@1
+            displayName: 'Upload Repository CSV'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/Repositories.csv'
+              ArtifactName: 'Reports'
+              publishLocation: 'Container'
