@@ -1,0 +1,152 @@
+parameters:
+- name: project_organization
+  type: string
+  default: SH-Gruppe
+  displayName: Organisation 
+  values:
+  - SH-Gruppe
+  - SCCM-Admin-Spielplatz
+- name: project_name
+  type: string
+  default:
+  displayName: Projektname
+- name: repo_name
+  type: string
+  displayName: Name des Repositories
+- name: project_type
+  type: string
+  default:
+  displayName: Art des Projektes
+- name: force_push
+  type: boolean
+  default: false
+  displayName: Pipeline-YAML automatisch in Default-Branch übernehmen
+
+stages:
+- stage: createPipelineFile
+  displayName: 'Pipeline-YAML für PR Decoration in Projekt ${{ parameters.project_name}} im Repo ${{ parameters.repo_name}} anlegen'
+  pool: Self-hosted Windows
+  jobs:
+  - job: CREATE_PR_PIPELINE
+    displayName: 'PR Decoration Pipeline anlegen'
+    timeoutInMinutes: 5
+    steps:
+    - powershell: |
+        Write-ADOPipelineLog "Init Organisation ..." 
+        $org = Get-ADOOrganization -Alias "SHGruppe" -servicePrincipal "$(ADO_ROOT_SPN_NAME)" -secret "$(ADO_ROOT_ACCESS_TOKEN)"
+        $admin = $org.getProjektByName("Admin")
+        $paramTargetProject = $org.getProjektByName("${{parameters.project_name}}")        
+        $targetProjectName = $paramTargetProject.getName()       
+        
+        # ACCESS CHECK, if user is member of Project Administrators
+        $accessAllowed = Test-ADOMemberOfGroup -organization $org -memberName $(Build.RequestedForEmail) -memberType HUMAN_USER -projectName $paramTargetProject.getName() -groupType PROJECT_ADMINS
+        $accessAllowed = $accessAllowed -or (Test-ADOMemberOfGroup -organization $org -memberName $(Build.RequestedForEmail) -memberType HUMAN_USER -projectName $paramTargetProject.getName() -groupType ORGANIZATION_SCCM_ADMINS)
+        Write-ADOPipelineLog "User $(Build.RequestedForEmail) - accessAllowed = $accessAllowed"
+        if ($accessAllowed -ne "true") {
+           Write-ADOPipelineLog "$(Build.RequestedForEmail) NOT ALLOWED to create PR decoration pipeline in project $targetProjectName, aborting" Error
+           exit 1
+        } 
+        
+        # Read and validate parameters 
+        Write-ADOPipelineLog "Read and validate parameters"        
+        $paramTargetRepository = $paramTargetProject.getGitRespositoryByName("${{parameters.repo_name}}")
+        if ($null -eq $paramTargetRepository) {
+           Write-ADOPipelineLog "Target repository ${{parameters.repo_name}} not found in project $targetProjectName" Error
+           exit 1
+        }
+        $targetRepositoryName = $paramTargetRepository.getName()       
+        $paramProjectType = "${{parameters.project_type}}"
+
+        # SOURCE variables of PR decoration pipeline templates
+        Write-ADOPipelineLog "Init source variables for project type: $paramProjectType"
+        $templateRepositoryName = "SelfServicePipelineTemplates"
+        $templateFile = "PRDecoration_" + $paramProjectType + ".yml"
+        $templateFilesDir = "templates/pipelines/"
+        $templateFilePath = $templateFilesDir + $templateFile
+        $templateRepository = $admin.getGitRespositoryByName($templateRepositoryName)
+        
+        # TARGET variables of PR decoration pipeline
+        Write-ADOPipelineLog "Init target variables"    
+        $targetBranchName = "feature/pr_decoration"
+        $targetDirectory = "pipelines/"
+        $targetFile = "SonarQube_PR_pipeline_" + $paramProjectType + ".yml"
+        $targetFilePath = $targetDirectory + $targetFile
+        Write-ADOPipelineLog "Check, if target branch exists: $targetBranchName  in repository $targetProjectName"
+        $targetBranch = $paramTargetRepository.getBranchByShortName($targetBranchName)
+        if ($null -eq $targetBranch) {
+           Write-ADOPipelineLog "Target branch not there yet, creating it"
+           $targetBranch = $paramTargetRepository.createBranchFromDefault($targetBranchName)
+        } else {
+           Write-ADOPipelineLog "Target branch '$targetBranchName' already exists, aborting" Error
+           exit 1
+        }
+
+        # Load template from source repository
+        Write-ADOPipelineLog "Init done, loading template data ... "
+        Write-ADOPipelineLog "Loading $templateFilePath from $templateRepositoryName"
+        $srcItem = New-ADOGitItem -gitRepository $templateRepository -path $templateFilePath
+        
+        Write-ADOPipelineLog "Copy template pipeline yml to target repository/project"
+        Copy-ADOFile -organization $org -comment "Creating PR decoration pipeline" ` -sourceProjectName "Admin" `
+        -sourceRepositoryName "SelfServicePipelineTemplates" `
+        -sourceBranchName "develop" `
+        -sourcePath $templateFilePath `
+        -targetRepositoryName $paramTargetRepository.getName() `
+        -targetProjectname $paramTargetProject.getName()  `
+        -targetBranchName $targetBranchName `
+        -firstTargetPath $targetFilePath
+        
+        if ("${{parameters.force_push}}" -eq "true") {
+          Write-ADOPipelineLog "Create AND approve PULL REQUEST"
+          New-ADOPullRequest -organisation $org `
+          -projectName $paramTargetProject.getName()  `
+          -repositoryName $paramTargetRepository.getName() `
+          -sourceRefName $targetBranchName `
+          -title "Aktivierung SonarQube PR-Decoration" `
+          -targetRefName $paramTargetRepository.getDefaultBranchShortName() `
+          -description "Aktivierung einer Pipeline zur SonarQube PR-Decoration"  `
+          -persistent `
+          | Complete-ADOPullRequest -mergeCommitMessage "PR decoration pipeline merged automatically" -deleteSourceBranch -bypassPolicies -justification "Self Service Action"
+        
+          $pipelineName = $paramTargetRepository.getName() + "_SonarQube_PR_" + $paramProjectType 
+        
+          Write-ADOPipelineLog "Create pipeline '$pipelineName'"
+          $targetPipeline = New-ADOPipeline -organization $org -projectName $paramTargetProject.getName() -name $pipelineName -path $targetFilePath -repositoryName $targetRepositoryName -persistent
+        
+          Write-ADOPipelineLog "Loading SCCM VARIABLE GROUP to give this pipeline access to it"
+          $variableGroupNameSccm = 'pipelines_sccm_rsc'
+          $variableGroupSccm = $paramTargetProject.getVariablegroupByName($variableGroupNameSccm)
+          if ($null -eq $variableGroupSccm) {
+             Write-ADOPipelineLog "Variable group $variableGroupNameSccm not found in target project. This will be needed for sonarqube connection" Warning
+          } else {
+             Write-ADOPipelineLog "Variable group $variableGroupNameSccm loaded"
+             $targetPipeline.setAccess($variableGroupSccm, 'true')
+          }
+          Write-ADOPipelineLog "Done with variable group setup"
+        
+          Write-ADOPipelineLog "Loading SERVICE CONNECTION to give this pipeline access to it"
+          $serviceConnectionName = "SonarQubeEnterprise_PROD"
+          $serviceConnection = $paramTargetProject.getEndpointByName($serviceConnectionName)
+          if ($null -eq $serviceConnection) {
+             Write-ADOPipelineLog "Service connection $serviceConnectionName not found in target project. This will be needed for sonarqube connection" Warning
+          } else {
+             Write-ADOPipelineLog "Service connection $serviceConnectionName loaded"
+             $targetPipeline.setAccess($serviceConnection, 'true')
+          }
+          Write-ADOPipelineLog "Done with service connection setup"
+          Write-ADOPipelineLog "Pipeline created $targetPipeline"
+        } else {
+          Write-ADOPipelineLog "Create Pull Request"
+          New-ADOPullRequest -organisation $org `
+          -projectName $paramTargetProject.getName()  `
+          -repositoryName $paramTargetRepository.getName() `
+          -sourceRefName $targetBranchName `
+          -title "Aktivierung SonarQube PR-Decoration" `
+          -targetRefName $paramTargetRepository.getDefaultBranchShortName() `
+          -description "Aktivierung einer Pipeline zur SonarQube PR-Decoration"  `
+          -persistent `
+        }
+        Write-ADOPipelineLog "### DONE ###"
+        exit 0
+      displayName: 'Create PR decoration pipeline'
+      name: TEST_INIT
