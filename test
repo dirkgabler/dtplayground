@@ -1,1 +1,31 @@
-Test Datet
+## Zielsetzung
+Verhinderung des Downloads und der Installation von npm-Paketen, die jünger als **X Tage** sind (*Cooldown-Period* gegen Supply-Chain-Angriffe), innerhalb unserer Azure DevOps Pipelines. Die Lösung muss manipulationssicher sein und darf nicht durch lokale Entwickler-Konfigurationen (`.npmrc`) oder Änderungen an der `package-lock.json` umgangen werden können.
+
+---
+
+## Ausgangslage & Technische Rahmenbedingungen
+* **Lokale Konfiguration nicht vertrauenswürdig:** Entwickler können ihre lokale `.npmrc` anpassen und neue Pakete in die `package-lock.json` einchecken.
+* **`NPM_CONFIG_MIN_RELEASE_AGE` reicht nicht aus:** Der native npm-Parameter greift nur bei der Versionsauflösung (`npm install`), wird aber bei `npm ci` und bereits vorhandenen `resolved`-Einträgen in der `package-lock.json` ignoriert.
+* **Nexus OSS:** Ohne kommerzielle *Sonatype Nexus Firewall*-Lizenz existiert keine native Proxy-Sperre für zu junge Artefakte im Repository Manager.
+
+---
+
+## Gewählte Architektur (Zentrale Pipeline-Validierung)
+
+Die Prüfung wird vom eigentlichen Installationsbefehl entkoppelt und über ein **zentrales, schreibgeschütztes Azure DevOps YAML-Template** erzwungen.
+
+### Ablauf in der Pipeline
+1. **Checkout:** Auschecken des Repositories inklusive der vom Entwickler eingecheckten `package-lock.json`.
+2. **Pre-Check-Skript (Audit):** Ein zentrales Validierungsskript prüft die ausgecheckte `package-lock.json` vor der Installation:
+   * **Altersprüfung:** Abfrage der Paket-Metadaten über die Nexus-API (`GET <nexus-url>/<paketname>`) und Prüfung des Veröffentlichungszeitpunkts (`time[version]`). Sind Pakete jünger als X Tage, bricht die Pipeline sofort mit einem Fehler ab (`exit 1`).
+   * **Domain-Validierung:** Prüfung, ob alle `resolved`-URLs im Lockfile ausschließlich auf unsere interne Nexus-Instanz verweisen (Schutz vor manipulierten externen URLs).
+3. **Installation (`npm ci`):** Erst nach erfolgreichem Pre-Check wird `npm ci` ausgeführt, um sicherzustellen, dass exakt der geprüfte Stand aus dem Lockfile installiert wird.
+
+---
+
+## Umsetzungsschritte (Akzeptanzkriterien)
+
+* [ ] **Pre-Check-Skript entwickeln:** Node.js- oder PowerShell-Skript erstellen, das `package-lock.json` (v2/v3) parst, alle Pakete gegen die Nexus-Metadaten auf das Mindestalter (X Tage) prüft und externe `resolved`-URLs blockiert.
+* [ ] **Zentrales YAML-Template bereitstellen:** Das Pre-Check-Skript und den `npm ci`-Step in einem zentralen, für Entwickler schreibgeschützten Template-Repository kapseln.
+* [ ] **Required Template erzwingen:** Die Nexus Service Connection (bzw. das Deployment-Environment) in Azure DevOps so konfigurieren, dass Zugriffe nur über das zentrale Template erlaubt sind (*Required Template Check*).
+* [ ] **Test & Rollout:** Verifizieren, dass ein Build mit einem Paket `< X Tage` in der `package-lock.json` fehlschlägt und nach Ablauf der Frist erfolgreich durchläuft.
